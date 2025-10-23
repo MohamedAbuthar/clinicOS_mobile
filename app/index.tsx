@@ -2,9 +2,10 @@ import { ThemedText } from '@/components/themed-text';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Circle, Path, Rect, Svg } from 'react-native-svg';
 
-// Custom SVG Components matching the web app exactly
+// Custom SVG Components matching web app
 const ClinicFlowLogo = () => (
   <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
     <Path
@@ -43,7 +44,7 @@ const QueueIcon = () => (
   </Svg>
 );
 
-const DocumentIcon = () => (
+const MedicalRecordsIcon = () => (
   <Svg width={48} height={48} viewBox="0 0 24 24" fill="none">
     <Path
       d="M9 2H15L19 6V20C19 21.1046 18.1046 22 17 22H7C5.89543 22 5 21.1046 5 20V6L9 2Z"
@@ -73,7 +74,7 @@ const AnalyticsIcon = () => (
   </Svg>
 );
 
-export default function HomeScreen() {
+export default function MainDashboard() {
   const router = useRouter();
 
   const handleGetStarted = () => {
@@ -89,7 +90,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
@@ -97,8 +98,9 @@ export default function HomeScreen() {
             <ClinicFlowLogo />
             <ThemedText style={styles.logoText}>ClinicFlow</ThemedText>
           </View>
+          
           <TouchableOpacity style={styles.signInButton} onPress={handleSignIn}>
-            <ThemedText style={styles.signInText}>Sign In</ThemedText>
+            <ThemedText style={styles.signInButtonText}>Sign In</ThemedText>
           </TouchableOpacity>
         </View>
 
@@ -110,7 +112,8 @@ export default function HomeScreen() {
             system. Handle appointments, queues, patient records, and more in
             one place.
           </ThemedText>
-          
+
+          {/* CTA Buttons */}
           <View style={styles.buttonContainer}>
             <TouchableOpacity style={styles.primaryButton} onPress={handleGetStarted}>
               <ThemedText style={styles.primaryButtonText}>Get Started</ThemedText>
@@ -148,7 +151,7 @@ export default function HomeScreen() {
           {/* Medical Records Card */}
           <View style={styles.featureCard}>
             <View style={styles.featureIcon}>
-              <DocumentIcon />
+              <MedicalRecordsIcon />
             </View>
             <ThemedText style={styles.featureTitle}>Medical Records</ThemedText>
             <ThemedText style={styles.featureDescription}>
@@ -168,14 +171,14 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB', // Light gray background matching web app
+    backgroundColor: '#F9FAFB',
   },
   scrollView: {
     flex: 1,
@@ -184,14 +187,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 16,
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
@@ -207,92 +207,81 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   signInButton: {
-    backgroundColor: '#14B8A6', // teal-600 matching web app
+    backgroundColor: '#14B8A6',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 6,
+    borderRadius: 8,
   },
-  signInText: {
+  signInButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '500',
   },
   heroSection: {
-    paddingHorizontal: 20,
-    paddingVertical: 64,
+    paddingHorizontal: 16,
+    paddingVertical: 32,
     alignItems: 'center',
   },
   heroTitle: {
-    fontSize: 40,
-    fontWeight: '700',
-    color: '#14B8A6', // teal-500 matching web app
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#14B8A6',
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 48,
+    marginBottom: 16,
   },
   heroSubtitle: {
-    fontSize: 20,
-    color: '#6B7280', // gray-500 matching web app
+    fontSize: 18,
+    color: '#6B7280',
     textAlign: 'center',
     lineHeight: 28,
     marginBottom: 32,
-    paddingHorizontal: 10,
-    maxWidth: 768, // max-w-3xl equivalent
+    paddingHorizontal: 16,
   },
   buttonContainer: {
     flexDirection: 'row',
     gap: 16,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
   },
   primaryButton: {
-    backgroundColor: '#14B8A6', // teal-600 matching web app
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    minWidth: 120,
+    backgroundColor: '#14B8A6',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '500',
-    textAlign: 'center',
   },
   secondaryButton: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB', // gray-300 matching web app
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    minWidth: 120,
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#14B8A6',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
   },
   secondaryButtonText: {
-    color: '#6B7280', // gray-500 matching web app
-    fontSize: 14,
+    color: '#14B8A6',
+    fontSize: 16,
     fontWeight: '500',
-    textAlign: 'center',
   },
   featuresContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 64,
+    paddingHorizontal: 16,
+    paddingBottom: 32,
+    gap: 16,
   },
   featureCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 32,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    padding: 24,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
     borderWidth: 1,
-    borderColor: '#E5E7EB', // gray-200 matching web app
+    borderColor: '#E5E7EB',
   },
   featureIcon: {
     marginBottom: 16,
@@ -300,13 +289,13 @@ const styles = StyleSheet.create({
   featureTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#111827', // gray-900 matching web app
-    marginBottom: 12,
+    color: '#111827',
     textAlign: 'center',
+    marginBottom: 12,
   },
   featureDescription: {
     fontSize: 14,
-    color: '#6B7280', // gray-500 matching web app
+    color: '#6B7280',
     textAlign: 'center',
     lineHeight: 20,
   },

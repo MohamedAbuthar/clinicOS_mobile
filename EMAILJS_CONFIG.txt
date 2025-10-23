@@ -1,0 +1,23 @@
+# EmailJS Configuration
+# Copy these values from your EmailJS dashboard and update frontendEmailService.ts
+
+# Step 1: Go to https://www.emailjs.com/
+# Step 2: Sign up for free account
+# Step 3: Create a service (Gmail, Outlook, etc.)
+# Step 4: Create an email template with these variables:
+#   - {{to_email}} - recipient email
+#   - {{otp_code}} - the OTP code
+#   - {{from_name}} - sender name
+# Step 5: Get your credentials from EmailJS dashboard
+
+# Your EmailJS Credentials (replace these):
+SERVICE_ID=service_your_actual_id
+TEMPLATE_ID=template_your_actual_id
+USER_ID=your_actual_user_id
+
+# Update these in lib/services/frontendEmailService.ts:
+# const EMAILJS_CONFIG = {
+#   SERVICE_ID: 'service_your_actual_id', // Replace with your service ID
+#   TEMPLATE_ID: 'template_your_actual_id', // Replace with your template ID
+#   USER_ID: 'your_actual_user_id', // Replace with your user ID
+# };
