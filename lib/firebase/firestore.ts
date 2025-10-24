@@ -73,7 +73,7 @@ export const createAppointment = async (appointmentData: any) => {
       console.log(`📅 Found ${existingAppointments.length} existing appointments for doctor ${appointmentData.doctorId} on ${appointmentData.appointmentDate}`);
       
       // Generate next token number
-      const maxToken = existingAppointments.reduce((max, apt) => {
+      const maxToken = existingAppointments.reduce((max, apt: any) => {
         const token = parseInt(apt.tokenNumber || '0');
         return token > max ? token : max;
       }, 0);
@@ -304,6 +304,39 @@ export const getAllDoctors = async () => {
   }
 };
 
+// Get doctor by ID, including user data
+export const getDoctorById = async (doctorId: string) => {
+  try {
+    const doctorDoc = await getDoc(doc(db, collections.doctors, doctorId));
+    if (!doctorDoc.exists()) {
+      return { success: false, error: 'Doctor not found' };
+    }
+
+    const doctorData = { id: doctorDoc.id, ...doctorDoc.data() };
+    let userData = null;
+
+    // @ts-ignore
+    if (doctorData.userId) {
+      // @ts-ignore
+      const userDoc = await getDoc(doc(db, collections.users, doctorData.userId));
+      if (userDoc.exists()) {
+        userData = { id: userDoc.id, ...userDoc.data() };
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        ...doctorData,
+        user: userData,
+      },
+    };
+  } catch (error: any) {
+    console.error(`Error fetching doctor ${doctorId}:`, error);
+    return { success: false, error: error.message };
+  }
+};
+
 // Real-time listeners
 export const subscribeToCollection = (
   collectionName: string, 
@@ -350,6 +383,27 @@ export const getAppointmentsByDoctor = async (doctorId: string) => {
   ]);
 };
 
+export const getAppointmentsByDoctorAndDate = async (doctorId: string, date: string) => {
+  return getDocuments(collections.appointments, [
+    where('doctorId', '==', doctorId),
+    where('appointmentDate', '==', date)
+  ]);
+};
+
+export const updateQueueOrder = async (appointmentId: string, newOrder: number) => {
+  try {
+    const appointmentRef = doc(db, collections.appointments, appointmentId);
+    await updateDoc(appointmentRef, {
+      queueOrder: newOrder,
+      updatedAt: Timestamp.now(),
+    });
+    return { success: true };
+  } catch (error: any) {
+    console.error(`Error updating queue order for ${appointmentId}:`, error);
+    return { success: false, error: error.message };
+  }
+};
+
 export const getQueueByPatient = async (patientId: string) => {
   return getDocuments(collections.queue, [
     where('patientId', '==', patientId),
@@ -386,8 +440,9 @@ export const getScheduleOverrides = async (doctorId: string) => {
         id: docSnapshot.id,
         ...docSnapshot.data()
       }))
+      // @ts-ignore
       .filter(override => override.isActive === true)
-      .sort((a, b) => {
+      .sort((a: any, b: any) => {
         // Sort by date descending (newest first)
         const dateA = new Date(a.date);
         const dateB = new Date(b.date);
@@ -719,7 +774,7 @@ export const getDoctorSchedule = async (doctorId: string) => {
         id: docSnapshot.id,
         ...docSnapshot.data()
       }))
-      .sort((a, b) => (a.dayOfWeek || 0) - (b.dayOfWeek || 0));
+      .sort((a: any, b: any) => (a.dayOfWeek || 0) - (b.dayOfWeek || 0));
     
     console.log('getDoctorSchedule: Returning schedules:', schedules);
     
@@ -834,6 +889,132 @@ export const deleteDoctorSchedule = async (doctorId: string, scheduleId: string)
     };
   } catch (error: any) {
     console.error('Delete doctor schedule error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+// ============================================
+// FAMILY MANAGEMENT OPERATIONS
+// ============================================
+
+export const getFamilyMembers = async (familyId: string) => {
+  try {
+    console.log('🔍 getFamilyMembers called with familyId:', familyId);
+    const patientsRef = collection(db, collections.patients);
+    const q = query(patientsRef, where('familyId', '==', familyId));
+    const querySnapshot = await getDocs(q);
+    
+    console.log('📊 Found', querySnapshot.docs.length, 'patients with familyId:', familyId);
+    
+    const members = querySnapshot.docs.map(docSnapshot => {
+      const data = docSnapshot.data();
+      console.log('👤 Family member:', docSnapshot.id, '| Name:', data.name, '| FamilyId:', data.familyId);
+      return {
+        id: docSnapshot.id,
+        ...data
+      };
+    });
+    
+    return {
+      success: true,
+      data: members
+    };
+  } catch (error: any) {
+    console.error('❌ Get family members error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+export const addFamilyMember = async (familyId: string, memberData: any) => {
+  try {
+    console.log('➕ addFamilyMember called');
+    console.log('   FamilyId:', familyId);
+    console.log('   Member data:', { name: memberData.name, dateOfBirth: memberData.dateOfBirth, gender: memberData.gender });
+    
+    // Filter out undefined, null, and empty string values
+    const cleanMemberData = Object.fromEntries(
+      Object.entries(memberData).filter(([_, value]) => 
+        value !== undefined && value !== null && value !== ''
+      )
+    );
+    
+    const patientsRef = collection(db, collections.patients);
+    const newMember = {
+      ...cleanMemberData,
+      familyId,
+      isActive: true,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now()
+    };
+    
+    const docRef = await addDoc(patientsRef, newMember);
+    console.log('✅ Family member created with ID:', docRef.id);
+    console.log('   Assigned familyId:', familyId);
+    
+    return {
+      success: true,
+      data: { id: docRef.id, ...newMember }
+    };
+  } catch (error: any) {
+    console.error('❌ Add family member error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+export const updateFamilyMember = async (memberId: string, updates: any) => {
+  try {
+    console.log('✏️ updateFamilyMember called for:', memberId);
+    
+    // Filter out undefined, null, and empty string values
+    const cleanUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([_, value]) => 
+        value !== undefined && value !== null && value !== ''
+      )
+    );
+    
+    const memberRef = doc(db, collections.patients, memberId);
+    await updateDoc(memberRef, {
+      ...cleanUpdates,
+      updatedAt: Timestamp.now()
+    });
+    
+    console.log('✅ Family member updated successfully');
+    
+    return {
+      success: true
+    };
+  } catch (error: any) {
+    console.error('❌ Update family member error:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+export const deleteFamilyMember = async (memberId: string) => {
+  try {
+    console.log('🗑️ deleteFamilyMember called for:', memberId);
+    
+    const memberRef = doc(db, collections.patients, memberId);
+    await deleteDoc(memberRef);
+    
+    console.log('✅ Family member deleted successfully');
+    
+    return {
+      success: true
+    };
+  } catch (error: any) {
+    console.error('❌ Delete family member error:', error);
     return {
       success: false,
       error: error.message

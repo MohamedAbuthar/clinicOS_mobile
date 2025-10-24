@@ -229,7 +229,6 @@ const menuItems = [
     { icon: Activity, label: 'Book Appointment', path: '/patient-book' },
     { icon: Users, label: 'Queue', path: '/patient-queue' },
     { icon: UserPlus, label: 'Profile', path: '/patient-profile' },
-    { icon: Folder, label: 'Medical Records', path: '/patient-medicalrecords' },
 ];
 
 const styles = StyleSheet.create({

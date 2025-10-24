@@ -18,15 +18,15 @@ export interface PatientProfile {
   id: string;
   name: string;
   phone: string;
-  email: string;
+  email?: string;
   dateOfBirth: string;
   gender: 'male' | 'female' | 'other';
-  address: string;
-  bloodGroup: string;
-  height: number; // in cm
-  weight: number; // in kg
-  allergies: string;
-  chronicConditions: string;
+  address?: string;
+  bloodGroup?: string;
+  height?: number;
+  weight?: number;
+  allergies?: string;
+  chronicConditions?: string;
   familyId?: string;
   emergencyContact?: string;
   emergencyContactName?: string;

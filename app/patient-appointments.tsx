@@ -2,10 +2,10 @@ import { AppointmentCard } from '@/components/AppointmentCard';
 import PatientLayout from '@/components/PatientLayout';
 import { ThemedText } from '@/components/themed-text';
 import { useBackendPatientAuth } from '@/lib/contexts/BackendPatientAuthContext';
-import { getAppointmentsByPatient } from '@/lib/firebase/firestore';
+import { getAppointmentsByPatient, getDoctorById } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 
@@ -34,43 +34,50 @@ interface Appointment {
 
 function PatientAppointmentsContent() {
   const router = useRouter();
-  const { patient, firebaseUser } = useBackendPatientAuth();
+  const { patient } = useBackendPatientAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load appointments from Firebase
   useEffect(() => {
     const loadAppointments = async () => {
+      if (!patient) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        if (patient) {
-          setUser({
-            id: patient.id,
-            email: patient.email,
-            name: patient.name
-          });
-          
-          const appointmentsResult = await getAppointmentsByPatient(patient.id);
-          if (appointmentsResult.success && appointmentsResult.data) {
-            const formattedAppointments = appointmentsResult.data.map((apt: any) => {
-              // Handle different date formats
+        setIsLoading(true);
+        const appointmentsResult = await getAppointmentsByPatient(patient.id);
+        
+        if (appointmentsResult.success && appointmentsResult.data) {
+          // Fetch doctor details for each appointment
+          const appointmentsWithDoctorDetails = await Promise.all(
+            appointmentsResult.data.map(async (apt: any) => {
+              let doctorName = 'Dr. Unknown';
+              let doctorSpecialty = 'General';
+
+              if (apt.doctorId) {
+                const doctorResult = await getDoctorById(apt.doctorId);
+                if (doctorResult.success && doctorResult.data) {
+                  const doctorData = doctorResult.data as any;
+                  // Assuming doctor's name is in user.name and specialty is in doctor's doc
+                  doctorName = doctorData.user?.name || `Dr. ${doctorData.name}` || 'Dr. Unknown';
+                  doctorSpecialty = doctorData.specialty || 'General';
+                }
+              }
+              
+              // Handle various date formats
               let formattedDate = 'TBD';
               if (apt.appointmentDate) {
                 try {
-                  // If it's a Firestore timestamp object
                   if (apt.appointmentDate.seconds) {
                     formattedDate = new Date(apt.appointmentDate.seconds * 1000).toISOString().split('T')[0];
-                  }
-                  // If it's already a string (YYYY-MM-DD format)
-                  else if (typeof apt.appointmentDate === 'string') {
+                  } else if (typeof apt.appointmentDate === 'string') {
                     formattedDate = apt.appointmentDate;
-                  }
-                  // If it's a Date object
-                  else if (apt.appointmentDate instanceof Date) {
+                  } else if (apt.appointmentDate instanceof Date) {
                     formattedDate = apt.appointmentDate.toISOString().split('T')[0];
-                  }
-                  // If it's a timestamp number
-                  else if (typeof apt.appointmentDate === 'number') {
+                  } else if (typeof apt.appointmentDate === 'number') {
                     formattedDate = new Date(apt.appointmentDate).toISOString().split('T')[0];
                   }
                 } catch (error) {
@@ -81,16 +88,18 @@ function PatientAppointmentsContent() {
 
               return {
                 id: apt.id,
-                doctorName: apt.doctorName || 'Dr. Unknown',
-                doctorSpecialty: apt.specialty || 'General',
+                doctorName,
+                doctorSpecialty,
                 appointmentDate: formattedDate,
-                appointmentTime: apt.appointmentTime || '10:30 AM',
+                appointmentTime: apt.appointmentTime || 'N/A',
                 status: apt.status || 'scheduled',
-                tokenNumber: apt.tokenNumber || '1',
+                tokenNumber: apt.tokenNumber || 'N/A',
               };
-            });
-            setAppointments(formattedAppointments);
-          }
+            })
+          );
+          setAppointments(appointmentsWithDoctorDetails);
+        } else {
+          setAppointments([]);
         }
       } catch (error) {
         console.error('Error loading appointments:', error);
@@ -124,8 +133,9 @@ function PatientAppointmentsContent() {
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           {isLoading ? (
-            <View style={styles.emptyState}>
-              <ThemedText style={styles.emptyTitle}>Loading appointments...</ThemedText>
+            <View style={styles.loadingState}>
+              <ActivityIndicator size="large" color="#14B8A6" />
+              <ThemedText style={styles.loadingText}>Loading appointments...</ThemedText>
             </View>
           ) : appointments.length > 0 ? (
             <View style={styles.appointmentsContainer}>
@@ -203,6 +213,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 64,
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 64,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#6B7280',
   },
   emptyTitle: {
     fontSize: 20,

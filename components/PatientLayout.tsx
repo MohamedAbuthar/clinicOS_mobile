@@ -1,5 +1,5 @@
 import { useBackendPatientAuth } from '@/lib/contexts/BackendPatientAuthContext';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Path, Svg } from 'react-native-svg';
@@ -23,10 +23,26 @@ interface PatientLayoutProps {
   children: React.ReactNode;
 }
 
+// Function to get page title and subtitle based on route
+const getPageInfo = (pathname: string) => {
+  const pageMap: Record<string, { title: string; subtitle: string }> = {
+    '/patient-dashboard': { title: 'Dashboard', subtitle: 'Overview of your health information' },
+    '/patient-appointments': { title: 'My Appointments', subtitle: 'View and manage your appointments' },
+    '/patient-book': { title: 'Book Appointment', subtitle: 'Schedule a new appointment' },
+    '/patient-queue': { title: 'Queue Status', subtitle: 'Check your position in the queue' },
+    '/patient-profile': { title: 'My Profile', subtitle: 'Manage your personal information' },
+  };
+
+  return pageMap[pathname] || { title: 'Patient Portal', subtitle: 'Welcome back!' };
+};
+
 export default function PatientLayout({ children }: PatientLayoutProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { isAuthenticated, isLoading: authLoading, logout } = useBackendPatientAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  const pageInfo = getPageInfo(pathname || '');
 
   useEffect(() => {
     // Redirect to login if not authenticated
@@ -94,8 +110,8 @@ export default function PatientLayout({ children }: PatientLayoutProps) {
             <Menu />
           </TouchableOpacity>
           <View style={styles.headerContent}>
-            <ThemedText style={styles.headerTitle}>Patient Portal</ThemedText>
-            <ThemedText style={styles.headerSubtitle}>Welcome back!</ThemedText>
+            <ThemedText style={styles.headerTitle}>{pageInfo.title}</ThemedText>
+            <ThemedText style={styles.headerSubtitle}>{pageInfo.subtitle}</ThemedText>
           </View>
         </View>
         

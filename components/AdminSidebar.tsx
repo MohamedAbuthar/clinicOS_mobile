@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Path, Svg } from 'react-native-svg';
 import { ThemedText } from './themed-text';
 
@@ -171,6 +171,8 @@ interface AdminSidebarProps {
   userRole?: string;
 }
 
+const SIDEBAR_WIDTH = 280;
+
 export function AdminSidebar({ 
   isOpen, 
   onClose, 
@@ -180,6 +182,9 @@ export function AdminSidebar({
   userName = 'Admin User',
   userRole = 'Administrator'
 }: AdminSidebarProps) {
+  const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
+  const [isSidebarVisible, setIsSidebarVisible] = useState(isOpen);
+
   const menuItems = [
     { icon: LayoutGrid, label: 'Dashboard', path: '/admin-dashboard' },
     { icon: Calendar, label: 'Appointments', path: '/admin-appointments' },
@@ -191,19 +196,38 @@ export function AdminSidebar({
     { icon: Settings, label: 'Settings', path: '/admin-settings' },
   ];
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (isOpen) {
+      setIsSidebarVisible(true);
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: -SIDEBAR_WIDTH,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setIsSidebarVisible(false);
+      });
+    }
+  }, [isOpen, slideAnim]);
+
+  if (!isSidebarVisible) return null;
 
   return (
-    <>
-      {/* Overlay */}
+    <View style={styles.overlayContainer}>
+      {/* Backdrop */}
       <TouchableOpacity 
-        style={styles.overlay} 
+        style={styles.backdrop} 
         activeOpacity={1} 
         onPress={onClose}
       />
       
       {/* Sidebar */}
-      <View style={styles.sidebar}>
+      <Animated.View style={[styles.sidebar, { transform: [{ translateX: slideAnim }] }]}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoContainer}>
@@ -258,34 +282,36 @@ export function AdminSidebar({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
-    </>
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  overlayContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    zIndex: 1000,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    zIndex: 998,
   },
   sidebar: {
     position: 'absolute',
     top: 0,
     left: 0,
-    width: 280,
+    width: SIDEBAR_WIDTH,
     height: '100%',
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',
-    shadowOffset: { width: 4, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 999,
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   header: {
     paddingHorizontal: 20,

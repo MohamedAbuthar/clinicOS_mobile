@@ -1,6 +1,6 @@
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { ThemedText } from '@/components/themed-text';
-import { getCurrentUser, signOutUser } from '@/lib/firebase/auth';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { getDocuments } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import { where } from 'firebase/firestore';
@@ -176,7 +176,7 @@ const AlertItem = ({ alert }: { alert: any }) => (
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const { user, logout, isAuthenticated, isLoading: authLoading } = useAuth();
   const [dashboardData, setDashboardData] = useState({
     appointmentsToday: 0,
     patientsWaiting: 0,
@@ -197,9 +197,10 @@ export default function AdminDashboard() {
 
   const handleLogout = async () => {
     try {
-      await signOutUser();
+      await logout();
       router.replace('/auth-login');
     } catch (error) {
+      console.error('Logout error:', error);
       Alert.alert('Error', 'Failed to logout');
     }
   };
@@ -212,15 +213,14 @@ export default function AdminDashboard() {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        const currentUser = getCurrentUser();
-        console.log('Admin Dashboard - Current User:', currentUser);
-        if (currentUser) {
-          setUser(currentUser);
+        if (!authLoading && !isAuthenticated) {
+          router.replace('/auth-login');
+          return;
+        }
+        
+        if (user) {
           
-          // Check if user has a document in users collection
-          const userDocResult = await getDocuments('users');
-          const userDoc = userDocResult.success ? userDocResult.data.find((u: any) => u.id === currentUser.uid) : null;
-          console.log('Admin Dashboard - User Document:', userDoc);
+          console.log('Admin Dashboard - User:', user, 'Role:', user.role);
           
           // Load appointments for today
           const appointmentsResult = await getDocuments('appointments', [
@@ -230,24 +230,72 @@ export default function AdminDashboard() {
           // Load doctors
           const doctorsResult = await getDocuments('doctors');
           
+          // Load assistants (needed for assistant role filtering)
+          const assistantsResult = await getDocuments('assistants');
+          
           console.log('Admin Dashboard - Appointments Result:', appointmentsResult);
           console.log('Admin Dashboard - Doctors Result:', doctorsResult);
           
           // Use data if available, otherwise use fallback
-          const appointments = appointmentsResult.success ? appointmentsResult.data : [];
+          let appointments = appointmentsResult.success ? appointmentsResult.data : [];
           const doctorsData = doctorsResult.success ? doctorsResult.data : [];
+          const assistantsData = assistantsResult.success ? assistantsResult.data : [];
           
-          if (appointments.length >= 0 && doctorsData.length >= 0) {
+          // Apply role-based filtering to doctors
+          let filteredDoctors = doctorsData;
+          if (user.role === 'doctor') {
+            // Doctor sees only themselves
+            filteredDoctors = doctorsData.filter((doctor: any) => doctor.userId === user.id);
+            console.log('Doctor role - Filtered doctors:', filteredDoctors);
+          } else if (user.role === 'assistant') {
+            // Assistant sees only their assigned doctors
+            const assistant = assistantsData.find((a: any) => a.userId === user.id);
+            if (assistant && (assistant as any).assignedDoctors) {
+              filteredDoctors = doctorsData.filter((doctor: any) => 
+                (assistant as any).assignedDoctors.includes(doctor.id)
+              );
+              console.log('Assistant role - Assigned doctors:', (assistant as any).assignedDoctors);
+              console.log('Assistant role - Filtered doctors:', filteredDoctors);
+            } else {
+              filteredDoctors = []; // No assigned doctors
+              console.log('Assistant role - No assigned doctors found');
+            }
+          }
+          // Admin sees all doctors (no filtering)
+          
+          // Apply role-based filtering to appointments
+          if (user.role === 'doctor') {
+            // Doctor sees only their own appointments
+            const doctorRecord = doctorsData.find((d: any) => d.userId === user.id);
+            if (doctorRecord) {
+              appointments = appointments.filter((apt: any) => apt.doctorId === doctorRecord.id);
+            } else {
+              appointments = [];
+            }
+          } else if (user.role === 'assistant') {
+            // Assistant sees appointments for their assigned doctors
+            const assistant = assistantsData.find((a: any) => a.userId === user.id);
+            if (assistant && (assistant as any).assignedDoctors) {
+              appointments = appointments.filter((apt: any) => 
+                (assistant as any).assignedDoctors.includes(apt.doctorId)
+              );
+            } else {
+              appointments = []; // No assigned doctors
+            }
+          }
+          // Admin sees all appointments (no filtering)
+          
+          if (appointments.length >= 0 && filteredDoctors.length >= 0) {
             
             // Calculate dashboard metrics
             const appointmentsToday = appointments.length;
-            const patientsWaiting = appointments.filter(apt => 
+            const patientsWaiting = appointments.filter((apt: any) => 
               apt.status === 'scheduled' || apt.status === 'confirmed'
             ).length;
-            const doctorsActive = doctorsData.filter(doctor => 
+            const doctorsActive = filteredDoctors.filter((doctor: any) => 
               doctor.status === 'In'
             ).length;
-            const noShows = appointments.filter(apt => 
+            const noShows = appointments.filter((apt: any) => 
               apt.status === 'no_show'
             ).length;
 
@@ -259,7 +307,7 @@ export default function AdminDashboard() {
             });
 
             // Transform doctors data for display
-            const transformedDoctors = doctorsData.map(doctor => ({
+            const transformedDoctors = filteredDoctors.map((doctor: any) => ({
               id: doctor.id,
               name: doctor.user?.name || doctor.name || 'Unknown Doctor',
               specialty: doctor.specialty || 'General',
@@ -361,7 +409,7 @@ export default function AdminDashboard() {
     };
 
     loadDashboardData();
-  }, [router]);
+  }, [user, isAuthenticated, authLoading, router]);
 
 
   const handleViewQueue = (doctor: any) => {
@@ -456,7 +504,7 @@ export default function AdminDashboard() {
         currentPath="/admin-dashboard"
         onNavigate={handleNavigate}
         onLogout={handleLogout}
-        userName={user?.displayName || 'Admin User'}
+        userName={user?.name || 'Admin User'}
         userRole={user?.role || 'Administrator'}
       />
     </SafeAreaView>
