@@ -9,7 +9,7 @@ import {
 } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import DraggableFlatList, { RenderItemParams, ScaleDecorator } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -50,7 +50,7 @@ const DragHandleIcon = () => (
 // --- Main Component ---
 export default function AdminQueues() {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
@@ -95,48 +95,96 @@ export default function AdminQueues() {
         name: doc.user?.name || `Dr. ${doc.name}` || 'Unknown Doctor',
         specialty: doc.specialty || 'General',
       }));
+      
+      console.log('Final doctor list:', doctorList);
       setDoctors(doctorList);
+      
       if (doctorList.length > 0) {
         setSelectedDoctor(doctorList[0]);
+      } else {
+        setIsLoading(false);
+        Alert.alert('No Doctors', 'No doctors available for your role.');
       }
     } else {
+      setIsLoading(false);
       Alert.alert('Error', 'Could not load doctors.');
     }
   };
 
   const fetchQueue = useCallback(async () => {
-    if (!selectedDoctor) return;
+    if (!selectedDoctor) {
+      console.log('No selected doctor, skipping queue fetch');
+      return;
+    }
+    
+    console.log('=== FETCHING QUEUE DATA ===');
+    console.log('Selected Doctor:', selectedDoctor);
+    
     setIsRefreshing(true);
     try {
       const today = new Date().toISOString().split('T')[0];
+      console.log('Today\'s date:', today);
+      
       const appointmentsResult = await getAppointmentsByDoctorAndDate(selectedDoctor.id, today);
+      console.log('Appointments result:', appointmentsResult);
 
       if (appointmentsResult.success && appointmentsResult.data) {
+        console.log('Raw appointments data:', appointmentsResult.data);
+        console.log('Number of appointments:', appointmentsResult.data.length);
+        
         const appointmentsWithNames = await Promise.all(
           appointmentsResult.data
             // @ts-ignore
-            .filter(apt => apt.status !== 'completed' && apt.status !== 'cancelled')
-            .map(async (apt: any) => {
+            .filter(apt => {
+              const isNotCompleted = apt.status !== 'completed' && apt.status !== 'cancelled';
+              console.log(`Appointment ${apt.id}: status=${apt.status}, included=${isNotCompleted}`);
+              return isNotCompleted;
+            })
+            .map(async (apt: any, index: number) => {
+              console.log(`Processing appointment ${index + 1}:`, {
+                id: apt.id,
+                patientId: apt.patientId,
+                tokenNumber: apt.tokenNumber,
+                status: apt.status,
+                checkedInAt: apt.checkedInAt,
+                queueOrder: apt.queueOrder
+              });
+              
               const patientResult = await getPatientProfile(apt.patientId);
+              const patientName = patientResult.success ? patientResult.data.name : 'Unknown Patient';
+              
+              console.log(`Patient for appointment ${apt.id}:`, patientName);
+              
               return {
                 id: apt.id,
                 patientId: apt.patientId,
                 tokenNumber: apt.tokenNumber || 'N/A',
                 // @ts-ignore
-                name: patientResult.success ? patientResult.data.name : 'Unknown Patient',
+                name: patientName,
                 status: apt.checkedInAt ? 'Checked In' : 'Waiting',
-                appointmentTime: apt.appointmentTime,
-                queueOrder: apt.queueOrder ?? Infinity, // Default to end of list
+                appointmentTime: apt.appointmentTime || 'N/A',
+                queueOrder: apt.queueOrder ?? 999, // Default to end of list
               };
             })
         );
+        
+        console.log('Appointments with names:', appointmentsWithNames);
+        
         // @ts-ignore
         appointmentsWithNames.sort((a, b) => a.queueOrder - b.queueOrder);
+        
+        console.log('Sorted queue:', appointmentsWithNames);
+        console.log('Final queue length:', appointmentsWithNames.length);
+        
         setQueue(appointmentsWithNames);
+      } else {
+        console.log('No appointments found or error:', appointmentsResult.error);
+        setQueue([]);
       }
     } catch (error) {
-      console.error(error);
+      console.error('Error fetching queue:', error);
       Alert.alert('Error', 'Failed to fetch queue.');
+      setQueue([]);
     } finally {
       setIsRefreshing(false);
       setIsLoading(false);
@@ -154,7 +202,9 @@ export default function AdminQueues() {
   }, [user, authLoading, isAuthenticated]);
 
   useEffect(() => {
+    console.log('Selected doctor changed:', selectedDoctor);
     if (selectedDoctor) {
+      setIsLoading(true);
       fetchQueue();
     }
   }, [selectedDoctor, fetchQueue]);
@@ -168,10 +218,19 @@ export default function AdminQueues() {
     );
     try {
       await Promise.all(updates);
-      // Optionally show a success message
+      Alert.alert('Success', 'Queue order updated successfully.');
     } catch (error) {
       Alert.alert('Error', 'Failed to save new queue order.');
       fetchQueue(); // Revert on failure
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.replace('/auth-login');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to logout');
     }
   };
 
@@ -202,7 +261,15 @@ export default function AdminQueues() {
   return (
     <GestureHandlerRootView style={styles.rootContainer}>
       <SafeAreaView style={styles.container} edges={['top']}>
-        <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} currentPath="/admin-queues" onNavigate={(path) => router.push(path as any)} />
+        <AdminSidebar 
+          isOpen={sidebarOpen} 
+          onClose={() => setSidebarOpen(false)} 
+          currentPath="/admin-queues" 
+          onNavigate={(path) => router.push(path as any)}
+          onLogout={handleLogout}
+          userName={user?.name || 'Admin User'}
+          userRole={user?.role || 'Administrator'}
+        />
         
         <View style={styles.header}>
           <TouchableOpacity onPress={() => setSidebarOpen(true)} style={styles.menuButton}>
@@ -224,45 +291,63 @@ export default function AdminQueues() {
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#14B8A6" />
+            <Text style={styles.loadingText}>Loading queue...</Text>
           </View>
-        ) : (
-          <DraggableFlatList
-            data={queue}
-            onDragEnd={handleReorder}
-            keyExtractor={(item) => item.id}
-            renderItem={renderItem}
+        ) : queue.length === 0 ? (
+          <ScrollView
             refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={fetchQueue} tintColor="#14B8A6" />}
-            style={styles.list}
-            contentContainerStyle={styles.listContent}
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>Queue is Empty</Text>
-                <Text style={styles.emptySubtitle}>No patients in the queue for this doctor today.</Text>
-              </View>
-            }
-          />
+            contentContainerStyle={styles.emptyStateContainer}
+          >
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>Queue is Empty</Text>
+              <Text style={styles.emptySubtitle}>No patients in the queue for {selectedDoctor?.name} today.</Text>
+            </View>
+          </ScrollView>
+        ) : (
+          <View style={styles.listContainer}>
+            <DraggableFlatList
+              data={queue}
+              onDragEnd={handleReorder}
+              keyExtractor={(item) => item.id}
+              renderItem={renderItem}
+              refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={fetchQueue} tintColor="#14B8A6" />}
+              contentContainerStyle={styles.listContent}
+            />
+          </View>
         )}
 
         <Modal
-          animationType="slide"
+          animationType="fade"
           transparent={true}
           visible={isModalVisible}
           onRequestClose={() => setModalVisible(false)}
         >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              {doctors.map(doc => (
-                <TouchableOpacity
-                  key={doc.id}
-                  style={styles.doctorOption}
-                  onPress={() => {
-                    setSelectedDoctor(doc);
-                    setModalVisible(false);
-                  }}
-                >
-                  <Text style={styles.doctorOptionText}>{doc.name}</Text>
-                </TouchableOpacity>
-              ))}
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity 
+              style={styles.modalBackdrop} 
+              activeOpacity={1} 
+              onPress={() => setModalVisible(false)}
+            />
+            <View style={styles.modalContentWrapper}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Select Doctor</Text>
+                <ScrollView style={styles.doctorList} showsVerticalScrollIndicator={true}>
+                  {doctors.map(doc => (
+                    <TouchableOpacity
+                      key={doc.id}
+                      style={styles.doctorOption}
+                      onPress={() => {
+                        console.log('Doctor selected:', doc);
+                        setSelectedDoctor(doc);
+                        setModalVisible(false);
+                      }}
+                    >
+                      <Text style={styles.doctorOptionText}>{doc.name}</Text>
+                      <Text style={styles.doctorOptionSubtext}>{doc.specialty}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
             </View>
           </View>
         </Modal>
@@ -281,9 +366,11 @@ const styles = StyleSheet.create({
   doctorSelector: { flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', backgroundColor: '#FFFFFF' },
   selectorLabel: { fontSize: 16, fontWeight: '500', color: '#374151' },
   selectorButton: { flex: 1, marginLeft: 10, padding: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8 },
-  selectorText: { fontSize: 16 },
+  selectorText: { fontSize: 16, color: '#111827' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  list: { flex: 1 },
+  loadingText: { marginTop: 12, fontSize: 14, color: '#6B7280' },
+  emptyStateContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  listContainer: { flex: 1 },
   listContent: { paddingBottom: 20 },
   queueItem: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   draggingItem: { backgroundColor: '#E0F2F1', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4 },
@@ -295,9 +382,14 @@ const styles = StyleSheet.create({
   statusText: { color: '#FFFFFF', fontSize: 12, fontWeight: '500' },
   emptyState: { alignItems: 'center', justifyContent: 'center', padding: 50 },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: '#111827' },
-  emptySubtitle: { fontSize: 14, color: '#6B7280', marginTop: 8 },
-  modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
+  emptySubtitle: { fontSize: 14, color: '#6B7280', marginTop: 8, textAlign: 'center' },
+  modalOverlay: { flex: 1 },
+  modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalContentWrapper: { flex: 1, justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '70%' },
+  modalTitle: { fontSize: 20, fontWeight: '700', color: '#111827', marginBottom: 16 },
+  doctorList: { maxHeight: 400 },
   doctorOption: { paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  doctorOptionText: { fontSize: 18, textAlign: 'center' },
+  doctorOptionText: { fontSize: 18, fontWeight: '500', color: '#111827' },
+  doctorOptionSubtext: { fontSize: 14, color: '#6B7280', marginTop: 4 },
 });
