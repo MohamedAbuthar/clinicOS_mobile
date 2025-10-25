@@ -1,11 +1,12 @@
 import { AddAppointmentDialog } from '@/components/AddAppointmentDialog';
 import { AdminSidebar } from '@/components/AdminSidebar';
+import { PaginationComponent } from '@/components/PaginationComponent';
 import { ThemedText } from '@/components/themed-text';
 import { getCurrentUser } from '@/lib/firebase/auth';
 import { createAppointment, createPatient, getAllDoctors, getDocuments } from '@/lib/firebase/firestore';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
-import { Calendar, Eye, FileText, Filter, Hash, Menu, Plus, Trash2 } from 'lucide-react-native';
+import { Calendar, FileText, Filter, Hash, Menu, Plus, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { Alert, Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -26,13 +27,17 @@ export default function AdminAppointments() {
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tempSelectedDate, setTempSelectedDate] = useState<Date>(new Date());
+  const [selectedDoctor, setSelectedDoctor] = useState<string>('');
+  const [showDoctorFilter, setShowDoctorFilter] = useState(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage] = useState<number>(10);
 
-  // Show all appointments when no date filter is selected
+  // Show all appointments when no filters are selected
   useEffect(() => {
-    if (appointments.length > 0 && !selectedDate) {
+    if (appointments.length > 0 && !selectedDate && !selectedDoctor) {
       setFilteredAppointments(appointments);
     }
-  }, [appointments, selectedDate]);
+  }, [appointments, selectedDate, selectedDoctor]);
 
   // Load appointments and doctors data
   useEffect(() => {
@@ -171,20 +176,37 @@ export default function AdminAppointments() {
   // Handle date filter change
   const handleDateFilterChange = (date: string) => {
     setSelectedDate(date);
-    setFilteredAppointments(filterAppointmentsByDate(appointments, date));
+    resetPagination();
+    setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, date, selectedDoctor));
   };
 
   // Clear date filter
   const clearDateFilter = () => {
     setSelectedDate('');
-    setFilteredAppointments(appointments);
+    resetPagination();
+    setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, '', selectedDoctor));
+  };
+
+  // Handle doctor filter change
+  const handleDoctorFilterChange = (doctorId: string) => {
+    setSelectedDoctor(doctorId);
+    resetPagination();
+    setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, selectedDate, doctorId));
+  };
+
+  // Clear doctor filter
+  const clearDoctorFilter = () => {
+    setSelectedDoctor('');
+    resetPagination();
+    setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, selectedDate, ''));
   };
 
   // Set today's date
   const setTodayDate = () => {
     const today = new Date().toISOString().split('T')[0];
     setSelectedDate(today);
-    setFilteredAppointments(filterAppointmentsByDate(appointments, today));
+    resetPagination();
+    setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, today, selectedDoctor));
   };
 
   // Delete appointment
@@ -226,6 +248,55 @@ export default function AdminAppointments() {
     return appointments.filter(appointment => appointment.appointmentDate === date);
   };
 
+  // Filter appointments by date and doctor
+  const filterAppointmentsByDateAndDoctor = (appointments: any[], date: string, doctorId: string) => {
+    let filtered = appointments;
+    
+    if (date) {
+      filtered = filtered.filter(appointment => appointment.appointmentDate === date);
+    }
+    
+    if (doctorId) {
+      filtered = filtered.filter(appointment => appointment.doctorId === doctorId);
+    }
+    
+    return filtered;
+  };
+
+  // Get paginated appointments
+  const getPaginatedAppointments = (appointments: any[]) => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return appointments.slice(startIndex, endIndex);
+  };
+
+  // Get total pages
+  const getTotalPages = (appointments: any[]) => {
+    return Math.ceil(appointments.length / itemsPerPage);
+  };
+
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // Handle double page navigation
+  const handleDoublePageChange = (direction: 'prev' | 'next') => {
+    const totalPages = getTotalPages(filteredAppointments);
+    if (direction === 'prev') {
+      const newPage = Math.max(1, currentPage - 2);
+      setCurrentPage(newPage);
+    } else {
+      const newPage = Math.min(totalPages, currentPage + 2);
+      setCurrentPage(newPage);
+    }
+  };
+
+  // Reset to first page when filters change
+  const resetPagination = () => {
+    setCurrentPage(1);
+  };
+
   // Load appointments function
   const loadAppointments = async () => {
     try {
@@ -249,7 +320,7 @@ export default function AdminAppointments() {
                       appointment.status === 'scheduled' ? '#F59E0B' : '#6B7280'
         }));
         setAppointments(transformedAppointments);
-        // Show all appointments initially if no date filter is selected
+        // Show all appointments initially if no filters are selected
         setFilteredAppointments(transformedAppointments);
         console.log('Loaded appointments:', transformedAppointments.length);
       } else {
@@ -438,6 +509,51 @@ export default function AdminAppointments() {
         )}
       </View>
 
+      {/* Doctor Filter */}
+      <View style={styles.filterSection}>
+        <TouchableOpacity 
+          style={styles.filterButton} 
+          onPress={() => setShowDoctorFilter(!showDoctorFilter)}
+        >
+          <Filter size={16} color="#6B7280" />
+          <ThemedText style={styles.filterButtonText}>
+            {selectedDoctor ? `Doctor: ${doctors.find(d => d.id === selectedDoctor)?.name || 'Unknown'}` : 'Filter by Doctor'}
+          </ThemedText>
+        </TouchableOpacity>
+        
+        {showDoctorFilter && (
+          <View style={styles.doctorFilterContainer}>
+            <View style={styles.doctorInputContainer}>
+              <ThemedText style={styles.doctorInputLabel}>Select Doctor:</ThemedText>
+              <View style={styles.doctorList}>
+                {doctors.map((doctor) => (
+                  <TouchableOpacity
+                    key={doctor.id}
+                    style={[
+                      styles.doctorOption,
+                      selectedDoctor === doctor.id && styles.doctorOptionSelected
+                    ]}
+                    onPress={() => handleDoctorFilterChange(doctor.id)}
+                  >
+                    <ThemedText style={[
+                      styles.doctorOptionText,
+                      selectedDoctor === doctor.id && styles.doctorOptionTextSelected
+                    ]}>
+                      {doctor.name}
+                    </ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            {selectedDoctor && (
+              <TouchableOpacity style={styles.clearFilterButton} onPress={clearDoctorFilter}>
+                <ThemedText style={styles.clearFilterText}>Clear Doctor Filter</ThemedText>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </View>
+
       {/* Date Picker Modal */}
       <Modal
         visible={showDatePicker}
@@ -504,7 +620,7 @@ export default function AdminAppointments() {
         <View style={styles.content}>
           {/* Appointment Cards */}
           <View style={styles.appointmentsList}>
-            {filteredAppointments.map((appointment) => (
+            {getPaginatedAppointments(filteredAppointments).map((appointment) => (
               <View key={appointment.id} style={styles.appointmentCard}>
                 <View style={styles.appointmentHeader}>
                   <View style={styles.appointmentInfo}>
@@ -547,10 +663,6 @@ export default function AdminAppointments() {
                 </View>
                 
                 <View style={styles.appointmentActions}>
-                  <TouchableOpacity style={styles.actionButton}>
-                    <Eye size={16} color="#059669" />
-                    <ThemedText style={styles.actionText}>View</ThemedText>
-                  </TouchableOpacity>
                   <TouchableOpacity 
                     style={styles.actionButton}
                     onPress={() => handleDeleteAppointment(appointment.id)}
@@ -562,6 +674,16 @@ export default function AdminAppointments() {
               </View>
             ))}
           </View>
+
+          {/* Pagination Controls */}
+          <PaginationComponent
+            currentPage={currentPage}
+            totalPages={getTotalPages(filteredAppointments)}
+            totalItems={filteredAppointments.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={handlePageChange}
+            onDoublePageChange={handleDoublePageChange}
+          />
         </View>
       </ScrollView>
 
@@ -710,6 +832,50 @@ const styles = StyleSheet.create({
   clearFilterText: {
     color: '#FFFFFF',
     fontSize: 12,
+    fontWeight: '500',
+  },
+  doctorFilterContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  doctorInputContainer: {
+    marginBottom: 8,
+  },
+  doctorInputLabel: {
+    color: '#374151',
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  doctorList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  doctorOption: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minWidth: 120,
+  },
+  doctorOptionSelected: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  doctorOptionText: {
+    fontSize: 14,
+    color: '#374151',
+    textAlign: 'center',
+  },
+  doctorOptionTextSelected: {
+    color: '#FFFFFF',
     fontWeight: '500',
   },
   datePickerModal: {
@@ -867,7 +1033,7 @@ const styles = StyleSheet.create({
   },
   appointmentActions: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
     marginTop: 12,
     gap: 12,
   },

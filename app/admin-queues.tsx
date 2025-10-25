@@ -1,11 +1,10 @@
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import {
-    getAllDoctors,
-    getAppointmentsByDoctorAndDate,
-    getDocuments,
-    getPatientProfile,
-    updateQueueOrder,
+  getAllDoctors,
+  getAppointmentsByDoctorAndDate,
+  getDocuments,
+  updateQueueOrder
 } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -76,7 +75,7 @@ export default function AdminQueues() {
       } else if (user.role === 'assistant') {
         // Assistant sees only their assigned doctors
         const assistantsData = assistantsResult.success ? assistantsResult.data : [];
-        const assistant = assistantsData.find((a: any) => a.userId === user.id);
+        const assistant = assistantsData?.find((a: any) => a.userId === user.id);
         if (assistant && (assistant as any).assignedDoctors) {
           filteredDoctorsData = doctorsResult.data.filter((doc: any) => 
             (assistant as any).assignedDoctors.includes(doc.id)
@@ -99,11 +98,11 @@ export default function AdminQueues() {
       console.log('Final doctor list:', doctorList);
       setDoctors(doctorList);
       
-      if (doctorList.length > 0) {
-        setSelectedDoctor(doctorList[0]);
-      } else {
+      if (doctorList.length === 0) {
         setIsLoading(false);
         Alert.alert('No Doctors', 'No doctors available for your role.');
+      } else {
+        setIsLoading(false);
       }
     } else {
       setIsLoading(false);
@@ -112,11 +111,6 @@ export default function AdminQueues() {
   };
 
   const fetchQueue = useCallback(async () => {
-    if (!selectedDoctor) {
-      console.log('No selected doctor, skipping queue fetch');
-      return;
-    }
-    
     console.log('=== FETCHING QUEUE DATA ===');
     console.log('Selected Doctor:', selectedDoctor);
     
@@ -125,7 +119,22 @@ export default function AdminQueues() {
       const today = new Date().toISOString().split('T')[0];
       console.log('Today\'s date:', today);
       
-      const appointmentsResult = await getAppointmentsByDoctorAndDate(selectedDoctor.id, today);
+      let appointmentsResult;
+      if (selectedDoctor) {
+        // If doctor is selected, get appointments for that specific doctor
+        appointmentsResult = await getAppointmentsByDoctorAndDate(selectedDoctor.id, today);
+      } else {
+        // If no doctor selected (admin flow), get all appointments for today
+        // We'll need to get appointments from all doctors
+        const allAppointments = [];
+        for (const doctor of doctors) {
+          const doctorAppointments = await getAppointmentsByDoctorAndDate(doctor.id, today);
+          if (doctorAppointments.success && doctorAppointments.data) {
+            allAppointments.push(...doctorAppointments.data);
+          }
+        }
+        appointmentsResult = { success: true, data: allAppointments };
+      }
       console.log('Appointments result:', appointmentsResult);
 
       if (appointmentsResult.success && appointmentsResult.data) {
@@ -135,7 +144,7 @@ export default function AdminQueues() {
         const appointmentsWithNames = await Promise.all(
           appointmentsResult.data
             // @ts-ignore
-            .filter(apt => {
+            .filter((apt: any) => {
               const isNotCompleted = apt.status !== 'completed' && apt.status !== 'cancelled';
               console.log(`Appointment ${apt.id}: status=${apt.status}, included=${isNotCompleted}`);
               return isNotCompleted;
@@ -150,8 +159,7 @@ export default function AdminQueues() {
                 queueOrder: apt.queueOrder
               });
               
-              const patientResult = await getPatientProfile(apt.patientId);
-              const patientName = patientResult.success ? patientResult.data.name : 'Unknown Patient';
+              const patientName = apt.patientName || 'Unknown Patient';
               
               console.log(`Patient for appointment ${apt.id}:`, patientName);
               
@@ -161,7 +169,7 @@ export default function AdminQueues() {
                 tokenNumber: apt.tokenNumber || 'N/A',
                 // @ts-ignore
                 name: patientName,
-                status: apt.checkedInAt ? 'Checked In' : 'Waiting',
+                status: (apt.checkedInAt ? 'Checked In' : 'Waiting') as 'Waiting' | 'Checked In',
                 appointmentTime: apt.appointmentTime || 'N/A',
                 queueOrder: apt.queueOrder ?? 999, // Default to end of list
               };
@@ -206,8 +214,12 @@ export default function AdminQueues() {
     if (selectedDoctor) {
       setIsLoading(true);
       fetchQueue();
+    } else if (doctors.length > 0 && !selectedDoctor) {
+      // For admin flow, fetch all appointments when doctors are loaded but no doctor is selected
+      setIsLoading(true);
+      fetchQueue();
     }
-  }, [selectedDoctor, fetchQueue]);
+  }, [selectedDoctor, fetchQueue, doctors]);
 
   const handleReorder = async ({ data }: { data: QueueItem[] }) => {
     setQueue(data); // Optimistic UI update
@@ -284,7 +296,9 @@ export default function AdminQueues() {
         <View style={styles.doctorSelector}>
           <Text style={styles.selectorLabel}>Doctor:</Text>
           <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.selectorButton}>
-            <Text style={styles.selectorText}>{selectedDoctor?.name || 'Select a Doctor'}</Text>
+            <Text style={[styles.selectorText, !selectedDoctor && styles.placeholderText]}>
+              {selectedDoctor?.name || 'Select a Doctor'}
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -298,10 +312,15 @@ export default function AdminQueues() {
             refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={fetchQueue} tintColor="#14B8A6" />}
             contentContainerStyle={styles.emptyStateContainer}
           >
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Queue is Empty</Text>
-              <Text style={styles.emptySubtitle}>No patients in the queue for {selectedDoctor?.name} today.</Text>
-            </View>
+             <View style={styles.emptyState}>
+               <Text style={styles.emptyTitle}>Queue is Empty</Text>
+               <Text style={styles.emptySubtitle}>
+                 {selectedDoctor 
+                   ? `No patients in the queue for ${selectedDoctor.name} today.`
+                   : 'No patients in the queue for any doctor today.'
+                 }
+               </Text>
+             </View>
           </ScrollView>
         ) : (
           <View style={styles.listContainer}>
@@ -367,6 +386,7 @@ const styles = StyleSheet.create({
   selectorLabel: { fontSize: 16, fontWeight: '500', color: '#374151' },
   selectorButton: { flex: 1, marginLeft: 10, padding: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8 },
   selectorText: { fontSize: 16, color: '#111827' },
+  placeholderText: { color: '#9CA3AF', fontStyle: 'italic' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, fontSize: 14, color: '#6B7280' },
   emptyStateContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },

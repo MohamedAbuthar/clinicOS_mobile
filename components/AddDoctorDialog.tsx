@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Dimensions, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { Path, Svg } from 'react-native-svg';
 import { ThemedText } from './themed-text';
 
@@ -121,6 +121,24 @@ const ChevronDown = () => (
   </Svg>
 );
 
+const Checkbox = ({ checked }: { checked: boolean }) => (
+  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M9 12L11 14L15 10"
+      stroke={checked ? "#FFFFFF" : "#6B7280"}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Path
+      d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z"
+      stroke={checked ? "#14B8A6" : "#6B7280"}
+      strokeWidth="2"
+      fill={checked ? "#14B8A6" : "none"}
+    />
+  </Svg>
+);
+
 interface AddDoctorDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -139,18 +157,37 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
     endTime: '17:00',
     room: '',
     slotDuration: '20',
-    status: 'In'
+    status: 'In',
+    assistants: [] as string[]
   });
   const [showSlotDurationPicker, setShowSlotDurationPicker] = useState(false);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
+  const [showAssistantPicker, setShowAssistantPicker] = useState(false);
+  const [assistants, setAssistants] = useState<any[]>([]);
+  const [loadingAssistants, setLoadingAssistants] = useState(false);
+
+  // Debug assistants state changes
+  useEffect(() => {
+    console.log('Assistants state changed:', assistants);
+  }, [assistants]);
   
   // Refs for scrolling
   const scrollViewRef = useRef<ScrollView>(null);
   const slotDurationRef = useRef<View>(null);
   const statusRef = useRef<View>(null);
+  const assistantRef = useRef<View>(null);
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    // Phone number validation - limit to 13 digits
+    if (field === 'phone') {
+      // Remove all non-digit characters
+      const digitsOnly = value.replace(/\D/g, '');
+      // Limit to 13 digits
+      const limitedValue = digitsOnly.slice(0, 13);
+      setFormData(prev => ({ ...prev, [field]: limitedValue }));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
   };
 
   const handleSlotDurationSelect = (value: string) => {
@@ -163,49 +200,254 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
     setShowStatusPicker(false);
   };
 
+  // Fetch assistants from database - NEW ROBUST APPROACH
+  const fetchAssistants = async () => {
+    try {
+      setLoadingAssistants(true);
+      console.log('🚀 STARTING ASSISTANT FETCH - NEW APPROACH');
+      
+      // Import getDocuments from your existing firestore utils
+      const { getDocuments } = await import('../lib/firebase/firestore');
+      
+      let allAssistants: any[] = [];
+      let fetchResults: any = {};
+      
+      // STEP 1: Try ALL possible collections
+      const collectionsToTry = [
+        'assistants',
+        'users', 
+        'staff',
+        'employees',
+        'personnel',
+        'team',
+        'workers',
+        'members'
+      ];
+      
+      console.log('📋 Trying collections:', collectionsToTry);
+      
+      for (const collectionName of collectionsToTry) {
+        try {
+          console.log(`🔍 Fetching from collection: ${collectionName}`);
+          const result = await getDocuments(collectionName);
+          console.log(`✅ ${collectionName} result:`, result);
+          
+          if (result.success && result.data && result.data.length > 0) {
+            console.log(`📊 Found ${result.data.length} items in ${collectionName}`);
+            fetchResults[collectionName] = result.data;
+            allAssistants = [...allAssistants, ...result.data];
+          } else {
+            console.log(`❌ No data in ${collectionName}`);
+          }
+        } catch (error) {
+          console.log(`❌ Error fetching ${collectionName}:`, error);
+        }
+      }
+      
+      console.log('📈 Total raw items found:', allAssistants.length);
+      console.log('📋 All fetch results:', fetchResults);
+      
+      // STEP 2: Filter for assistants using multiple criteria
+      const assistantCriteria = [
+        // Role-based filtering
+        (item: any) => {
+          const role = item.role || item.userRole || item.user?.role || item.position || item.jobTitle || item.title;
+          return role && (
+            role.toLowerCase().includes('assistant') ||
+            role.toLowerCase().includes('helper') ||
+            role.toLowerCase().includes('support') ||
+            role.toLowerCase().includes('staff') ||
+            role === 'assistant' ||
+            role === 'Assistant' ||
+            role === 'ASSISTANT'
+          );
+        },
+        // Type-based filtering
+        (item: any) => {
+          const type = item.type || item.userType || item.user?.type;
+          return type && (
+            type.toLowerCase().includes('assistant') ||
+            type.toLowerCase().includes('staff')
+          );
+        },
+        // Category-based filtering
+        (item: any) => {
+          const category = item.category || item.userCategory || item.user?.category;
+          return category && (
+            category.toLowerCase().includes('assistant') ||
+            category.toLowerCase().includes('staff')
+          );
+        },
+        // Status-based filtering (active assistants)
+        (item: any) => {
+          const status = item.status || item.userStatus || item.user?.status;
+          const isActive = item.isActive !== false && item.active !== false;
+          return isActive && status && (
+            status.toLowerCase().includes('assistant') ||
+            status.toLowerCase().includes('active')
+          );
+        }
+      ];
+      
+      let filteredAssistants: any[] = [];
+      
+      // Try each filtering criteria
+      for (let i = 0; i < assistantCriteria.length; i++) {
+        const criteria = assistantCriteria[i];
+        const filtered = allAssistants.filter(criteria);
+        console.log(`🔍 Criteria ${i + 1} found:`, filtered.length, 'assistants');
+        filteredAssistants = [...filteredAssistants, ...filtered];
+      }
+      
+      // STEP 3: Remove duplicates
+      const uniqueAssistants = filteredAssistants.filter((assistant, index, self) => 
+        index === self.findIndex(a => a.id === assistant.id)
+      );
+      
+      console.log('🎯 Final unique assistants:', uniqueAssistants.length);
+      console.log('📋 All unique assistants data:', uniqueAssistants);
+      
+      // STEP 4: Transform assistants with robust name extraction
+      if (uniqueAssistants.length > 0) {
+        const transformedAssistants = uniqueAssistants.map((assistant: any, index: number) => {
+          console.log(`\n🔄 PROCESSING ASSISTANT ${index + 1}/${uniqueAssistants.length}`);
+          console.log('📄 Raw data:', JSON.stringify(assistant, null, 2));
+          
+          // Extract name using multiple strategies
+          const nameStrategies = [
+            () => assistant.name,
+            () => assistant.user?.name,
+            () => assistant.fullName,
+            () => assistant.displayName,
+            () => assistant.firstName + ' ' + assistant.lastName,
+            () => assistant.firstName,
+            () => assistant.user?.firstName + ' ' + assistant.user?.lastName,
+            () => assistant.user?.firstName,
+            () => assistant.profile?.name,
+            () => assistant.profile?.firstName + ' ' + assistant.profile?.lastName,
+            () => assistant.profile?.firstName,
+            () => assistant.data?.name,
+            () => assistant.data?.firstName + ' ' + assistant.data?.lastName,
+            () => assistant.data?.firstName,
+            () => assistant.details?.name,
+            () => assistant.details?.firstName + ' ' + assistant.details?.lastName,
+            () => assistant.details?.firstName,
+            () => assistant.info?.name,
+            () => assistant.info?.firstName + ' ' + assistant.info?.lastName,
+            () => assistant.info?.firstName
+          ];
+          
+          let assistantName = '';
+          let usedStrategy = '';
+          
+          for (let i = 0; i < nameStrategies.length; i++) {
+            try {
+              const name = nameStrategies[i]();
+              if (name && name !== 'undefined' && name !== 'null' && name.trim() !== '') {
+                assistantName = name.trim();
+                usedStrategy = `Strategy ${i + 1}`;
+                break;
+              }
+            } catch (error) {
+              // Continue to next strategy
+            }
+          }
+          
+          // Fallback if no name found
+          if (!assistantName) {
+            assistantName = `Assistant ${index + 1}`;
+            usedStrategy = 'Fallback';
+          }
+          
+          // Extract email
+          const emailStrategies = [
+            () => assistant.email,
+            () => assistant.user?.email,
+            () => assistant.emailAddress,
+            () => assistant.user?.emailAddress,
+            () => assistant.contact?.email,
+            () => assistant.details?.email,
+            () => assistant.info?.email
+          ];
+          
+          let assistantEmail = '';
+          for (const strategy of emailStrategies) {
+            try {
+              const email = strategy();
+              if (email && email !== 'undefined' && email !== 'null' && email.trim() !== '') {
+                assistantEmail = email.trim();
+                break;
+              }
+            } catch (error) {
+              // Continue to next strategy
+            }
+          }
+          
+          console.log(`✅ Assistant ${index + 1} - Name: "${assistantName}" (${usedStrategy})`);
+          console.log(`📧 Assistant ${index + 1} - Email: "${assistantEmail}"`);
+          
+          return {
+            id: assistant.id || `assistant_${index + 1}`,
+            name: assistantName,
+            email: assistantEmail,
+            isActive: assistant.isActive !== false
+          };
+        });
+        
+        console.log('🎉 FINAL TRANSFORMED ASSISTANTS:', transformedAssistants);
+        setAssistants(transformedAssistants);
+      } else {
+        console.log('❌ No assistants found after filtering');
+        setAssistants([]);
+      }
+      
+    } catch (error) {
+      console.error('💥 Error fetching assistants:', error);
+      setAssistants([]);
+    } finally {
+      setLoadingAssistants(false);
+    }
+  };
+
+  const handleAssistantToggle = (assistantId: string) => {
+    setFormData(prev => {
+      const currentAssistants = prev.assistants;
+      const isSelected = currentAssistants.includes(assistantId);
+      
+      if (isSelected) {
+        // Remove assistant
+        return {
+          ...prev,
+          assistants: currentAssistants.filter(id => id !== assistantId)
+        };
+      } else {
+        // Add assistant
+        return {
+          ...prev,
+          assistants: [...currentAssistants, assistantId]
+        };
+      }
+    });
+  };
+
   const handleSlotDurationToggle = () => {
     setShowSlotDurationPicker(!showSlotDurationPicker);
-    if (!showSlotDurationPicker) {
-      // Scroll to slot duration field when opening
-      setTimeout(() => {
-        slotDurationRef.current?.measureInWindow((x, y, width, height) => {
-          const screenHeight = Dimensions.get('window').height;
-          const dropdownHeight = 250; // Approximate dropdown height
-          const availableSpace = screenHeight - y - height;
-          
-          if (availableSpace < dropdownHeight) {
-            // Scroll up to make room for dropdown
-            scrollViewRef.current?.scrollTo({
-              y: Math.max(0, y - dropdownHeight - 50),
-              animated: true
-            });
-          }
-        });
-      }, 150);
-    }
+    setShowStatusPicker(false); // Close other dropdown
+    setShowAssistantPicker(false); // Close other dropdown
   };
 
   const handleStatusToggle = () => {
     setShowStatusPicker(!showStatusPicker);
-    if (!showStatusPicker) {
-      // Scroll to status field when opening
-      setTimeout(() => {
-        statusRef.current?.measureInWindow((x, y, width, height) => {
-          const screenHeight = Dimensions.get('window').height;
-          const dropdownHeight = 200; // Approximate dropdown height
-          const availableSpace = screenHeight - y - height;
-          
-          if (availableSpace < dropdownHeight) {
-            // Scroll up to make room for dropdown
-            scrollViewRef.current?.scrollTo({
-              y: Math.max(0, y - dropdownHeight - 50),
-              animated: true
-            });
-          }
-        });
-      }, 150);
-    }
+    setShowSlotDurationPicker(false); // Close other dropdown
+    setShowAssistantPicker(false); // Close other dropdown
   };
+
+  const handleAssistantDropdownToggle = () => {
+    setShowAssistantPicker(!showAssistantPicker);
+    setShowSlotDurationPicker(false); // Close other dropdown
+    setShowStatusPicker(false); // Close other dropdown
+  };
+
 
   const handleSubmit = () => {
     if (!formData.name || !formData.specialty || !formData.phone || !formData.email || !formData.password) {
@@ -225,10 +467,12 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
       endTime: '17:00',
       room: '',
       slotDuration: '20',
-      status: 'In'
+      status: 'In',
+      assistants: []
     });
     setShowSlotDurationPicker(false);
     setShowStatusPicker(false);
+    setShowAssistantPicker(false);
   };
 
   const handleClose = () => {
@@ -236,10 +480,11 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
     onClose();
   };
 
-  // Reset form when dialog opens
+  // Reset form when dialog opens and fetch assistants
   useEffect(() => {
     if (isOpen) {
       resetForm();
+      fetchAssistants();
     }
   }, [isOpen]);
 
@@ -249,8 +494,9 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
     <Modal
       visible={isOpen}
       transparent={true}
-      animationType="fade"
+      animationType="slide"
       onRequestClose={handleClose}
+      presentationStyle="overFullScreen"
     >
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} onPress={handleClose} />
@@ -266,7 +512,14 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
             </TouchableOpacity>
           </View>
 
-          <ScrollView ref={scrollViewRef} style={styles.content} showsVerticalScrollIndicator={false}>
+          <ScrollView 
+            ref={scrollViewRef} 
+            style={styles.content} 
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled={true}
+            bounces={false}
+          >
             <View style={styles.form}>
               {/* Name */}
               <View style={styles.inputGroup}>
@@ -279,6 +532,7 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
                   onChangeText={(value) => handleInputChange('name', value)}
                   placeholder="Dr. John Doe"
                   placeholderTextColor="#9CA3AF"
+                  returnKeyType="next"
                 />
               </View>
 
@@ -293,6 +547,7 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
                   onChangeText={(value) => handleInputChange('specialty', value)}
                   placeholder="General Physician, Cardiologist, etc."
                   placeholderTextColor="#9CA3AF"
+                  returnKeyType="next"
                 />
               </View>
 
@@ -302,14 +557,16 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
                   <ThemedText style={styles.label}>
                     <Phone /> Phone Number <ThemedText style={styles.required}>*</ThemedText>
                   </ThemedText>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.phone}
-                    onChangeText={(value) => handleInputChange('phone', value)}
-                    placeholder="+91 98765 43210"
-                    placeholderTextColor="#9CA3AF"
-                    keyboardType="phone-pad"
-                  />
+                   <TextInput
+                     style={styles.input}
+                     value={formData.phone}
+                     onChangeText={(value) => handleInputChange('phone', value)}
+                     placeholder="Enter 13-digit phone number"
+                     placeholderTextColor="#9CA3AF"
+                     keyboardType="phone-pad"
+                     returnKeyType="next"
+                     maxLength={13}
+                   />
                 </View>
                 <View style={[styles.inputGroup, styles.halfWidth]}>
                   <ThemedText style={styles.label}>
@@ -323,6 +580,7 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
                     placeholderTextColor="#9CA3AF"
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    returnKeyType="next"
                   />
                 </View>
               </View>
@@ -339,6 +597,7 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
                   placeholder="Enter password for doctor login"
                   placeholderTextColor="#9CA3AF"
                   secureTextEntry
+                  returnKeyType="next"
                 />
                 <ThemedText style={styles.helpText}>
                   This password will be used for doctor to login to the admin portal
@@ -357,6 +616,7 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
                     onChangeText={(value) => handleInputChange('startTime', value)}
                     placeholder="09:00"
                     placeholderTextColor="#9CA3AF"
+                    returnKeyType="next"
                   />
                 </View>
                 <View style={[styles.inputGroup, styles.halfWidth]}>
@@ -369,6 +629,7 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
                     onChangeText={(value) => handleInputChange('endTime', value)}
                     placeholder="17:00"
                     placeholderTextColor="#9CA3AF"
+                    returnKeyType="next"
                   />
                 </View>
               </View>
@@ -384,6 +645,7 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
                   onChangeText={(value) => handleInputChange('room', value)}
                   placeholder="Room 101"
                   placeholderTextColor="#9CA3AF"
+                  returnKeyType="done"
                 />
               </View>
 
@@ -522,25 +784,130 @@ export function AddDoctorDialog({ isOpen, onClose, onSubmit, isLoading = false }
                   )}
                 </View>
               </View>
+
+              {/* Assistants */}
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.label}>
+                  <UserPlus /> Assign Assistants
+                </ThemedText>
+                <View ref={assistantRef} style={styles.assistantWrapper}>
+                  <View style={styles.selectContainer}>
+                    <TouchableOpacity 
+                      style={styles.select}
+                      onPress={handleAssistantDropdownToggle}
+                    >
+                      <ThemedText style={styles.selectText}>
+                        {formData.assistants.length === 0 
+                          ? 'Select Assistants' 
+                          : `${formData.assistants.length} Assistant${formData.assistants.length > 1 ? 's' : ''} selected`
+                        }
+                      </ThemedText>
+                      <ChevronDown />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {/* Assistant Dropdown */}
+                  {showAssistantPicker && (
+                    <View style={[styles.dropdown, styles.assistantDropdown]}>
+                      <ScrollView 
+                        style={styles.assistantDropdownList}
+                        contentContainerStyle={styles.scrollContent}
+                        showsVerticalScrollIndicator={true}
+                        nestedScrollEnabled={true}
+                        bounces={true}
+                        scrollEnabled={true}
+                        keyboardShouldPersistTaps="handled"
+                        alwaysBounceVertical={false}
+                        scrollEventThrottle={16}
+                        removeClippedSubviews={false}
+                        persistentScrollbar={true}
+                      >
+                        {(() => {
+                          console.log('=== RENDERING ASSISTANTS DROPDOWN ===');
+                          console.log('Assistants count:', assistants.length);
+                          console.log('Loading state:', loadingAssistants);
+                          console.log('All assistants data:', assistants);
+                          
+                          return loadingAssistants ? (
+                            <View style={styles.loadingContainer}>
+                              <ThemedText style={styles.loadingText}>Loading assistants...</ThemedText>
+                            </View>
+                          ) : assistants.length === 0 ? (
+                          <View style={styles.loadingContainer}>
+                            <ThemedText style={styles.loadingText}>No assistants found in database</ThemedText>
+                            <ThemedText style={styles.errorText}>Please check your database connection</ThemedText>
+                          </View>
+                          ) : (
+                            <View style={styles.assistantListContainer}>
+                              {assistants.map((assistant, index) => {
+                            console.log(`Rendering assistant ${index + 1}:`, assistant);
+                            const isSelected = formData.assistants.includes(assistant.id);
+                            const isLast = index === assistants.length - 1;
+                            
+                            console.log(`Assistant ${index + 1} - Name: "${assistant.name}", Selected: ${isSelected}`);
+                            
+                            return (
+                              <TouchableOpacity
+                                key={assistant.id}
+                                style={[
+                                  styles.dropdownItem, 
+                                  styles.checkboxItem,
+                                  isSelected && styles.dropdownItemSelected,
+                                  isLast && styles.dropdownItemLast
+                                ]}
+                                onPress={() => handleAssistantToggle(assistant.id)}
+                              >
+                                <View style={styles.checkboxContainer}>
+                                  <Checkbox checked={isSelected} />
+                                </View>
+                                <View style={styles.assistantInfo}>
+                                  <ThemedText style={[
+                                    styles.dropdownItemText, 
+                                    isSelected && styles.dropdownItemTextSelected
+                                  ]}>
+                                    {assistant.name}
+                                  </ThemedText>
+                                  {assistant.email && (
+                                    <ThemedText style={styles.assistantEmail}>
+                                      {assistant.email}
+                                    </ThemedText>
+                                  )}
+                                  {!assistant.isActive && (
+                                    <ThemedText style={styles.inactiveLabel}>
+                                      Inactive
+                                    </ThemedText>
+                                  )}
+                                </View>
+                              </TouchableOpacity>
+                            );
+                              })}
+                            </View>
+                          );
+                        })()}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+
+            {/* Actions */}
+            <View style={styles.actions}>
+              <TouchableOpacity style={styles.cancelButton} onPress={handleClose}>
+                <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.submitButton, (!formData.name || !formData.specialty || !formData.phone || !formData.email || !formData.password || isLoading) && styles.submitButtonDisabled]} 
+                onPress={handleSubmit}
+                disabled={!formData.name || !formData.specialty || !formData.phone || !formData.email || !formData.password || isLoading}
+              >
+                <UserPlus />
+                <ThemedText style={styles.submitButtonText}>
+                  {isLoading ? 'Creating...' : 'Add Doctor'}
+                </ThemedText>
+              </TouchableOpacity>
             </View>
           </ScrollView>
-
-          {/* Actions */}
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.cancelButton} onPress={handleClose}>
-              <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.submitButton, (!formData.name || !formData.specialty || !formData.phone || !formData.email || !formData.password || isLoading) && styles.submitButtonDisabled]} 
-              onPress={handleSubmit}
-              disabled={!formData.name || !formData.specialty || !formData.phone || !formData.email || !formData.password || isLoading}
-            >
-              <UserPlus />
-              <ThemedText style={styles.submitButtonText}>
-                {isLoading ? 'Creating...' : 'Add Doctor'}
-              </ThemedText>
-            </TouchableOpacity>
-          </View>
         </View>
       </View>
     </Modal>
@@ -554,7 +921,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    overflow: 'visible',
   },
   backdrop: {
     position: 'absolute',
@@ -573,7 +939,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 8,
-    overflow: 'visible',
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
@@ -598,20 +964,22 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
-    overflow: 'visible',
   },
   form: {
     gap: 16,
   },
   inputGroup: {
-    gap: 6,
+    gap: 8,
+    marginBottom: 8,
   },
   row: {
     flexDirection: 'row',
     gap: 12,
+    flexWrap: 'wrap',
   },
   halfWidth: {
     flex: 1,
+    minWidth: 150,
   },
   label: {
     fontSize: 12,
@@ -629,36 +997,42 @@ const styles = StyleSheet.create({
     borderColor: '#D1D5DB',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     fontSize: 14,
     color: '#111827',
     backgroundColor: '#FFFFFF',
+    minHeight: 44,
+    textAlignVertical: 'center',
   },
   selectContainerWrapper: {
     position: 'relative',
   },
   slotDurationWrapper: {
     position: 'relative',
-    zIndex: 10,
-    elevation: 5,
+    zIndex: 5,
   },
   statusWrapper: {
     position: 'relative',
-    zIndex: 5,
-    elevation: 3,
+    zIndex: 10,
+  },
+  assistantWrapper: {
+    position: 'relative',
+    zIndex: 15,
   },
   selectContainer: {
     borderWidth: 1,
     borderColor: '#D1D5DB',
     borderRadius: 8,
     backgroundColor: '#FFFFFF',
+    minHeight: 44,
   },
   select: {
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    minHeight: 44,
   },
   selectText: {
     fontSize: 14,
@@ -673,16 +1047,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     padding: 20,
+    paddingBottom: 30,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
     backgroundColor: '#F9FAFB',
   },
   cancelButton: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 12,
     backgroundColor: '#F3F4F6',
     borderRadius: 8,
     alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
   },
   cancelButtonText: {
     fontSize: 14,
@@ -695,9 +1072,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
+    paddingVertical: 12,
     backgroundColor: '#14B8A6',
     borderRadius: 8,
+    minHeight: 44,
   },
   submitButtonDisabled: {
     backgroundColor: '#D1D5DB',
@@ -709,46 +1087,102 @@ const styles = StyleSheet.create({
   },
   dropdown: {
     position: 'absolute',
-    top: '100%',
+    bottom: '100%',
     left: 0,
     right: 0,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#D1D5DB',
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    elevation: 15,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    elevation: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    maxHeight: 300,
-    zIndex: 9999,
-    marginTop: 2,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    maxHeight: 200,
+    zIndex: 1000,
+    marginBottom: 1,
   },
   slotDurationDropdown: {
     zIndex: 1000,
-    maxHeight: 250,
+    maxHeight: 180,
   },
   statusDropdown: {
-    zIndex: 500,
-    maxHeight: 200,
+    zIndex: 1001,
+    maxHeight: 180,
+  },
+  assistantDropdown: {
+    zIndex: 1002,
+    maxHeight: 350,
+    minHeight: 120,
   },
   dropdownList: {
-    maxHeight: 200,
+    maxHeight: 150,
     flexGrow: 0,
   },
   statusDropdownList: {
     maxHeight: 150,
     flexGrow: 0,
   },
+  assistantDropdownList: {
+    maxHeight: 300,
+    flexGrow: 0,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
+    paddingTop: 5,
+  },
+  assistantListContainer: {
+    flex: 1,
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontStyle: 'italic',
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  checkboxItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  checkboxContainer: {
+    marginRight: 12,
+  },
+  assistantInfo: {
+    flex: 1,
+  },
+  assistantEmail: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  inactiveLabel: {
+    fontSize: 10,
+    color: '#EF4444',
+    marginTop: 2,
+    fontWeight: '500',
+  },
   dropdownItem: {
     paddingHorizontal: 12,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
-    minHeight: 48,
+    minHeight: 50,
+    justifyContent: 'center',
   },
   dropdownItemLast: {
     borderBottomWidth: 0,

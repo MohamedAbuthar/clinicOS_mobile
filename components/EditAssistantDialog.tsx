@@ -90,17 +90,24 @@ const Users = () => (
   </Svg>
 );
 
-const UserPlus = () => (
+const Save = () => (
   <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
     <Path
-      d="M16 21V19C16 17.9391 15.5786 16.9217 14.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21M16 7C16 9.20914 14.2091 11 12 11C9.79086 11 8 9.20914 8 7C8 4.79086 9.79086 3 12 3C14.2091 3 16 4.79086 16 7Z"
+      d="M19 21H5C3.89543 21 3 20.1046 3 19V5C3 3.89543 3.89543 3 5 3H16L21 8V19C21 20.1046 20.1046 21 19 21Z"
       stroke="#FFFFFF"
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
     <Path
-      d="M20 8V14M17 11H23"
+      d="M17 21V13H7V21"
+      stroke="#FFFFFF"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Path
+      d="M7 3V8H15"
       stroke="#FFFFFF"
       strokeWidth="2"
       strokeLinecap="round"
@@ -127,20 +134,32 @@ interface Doctor {
   specialty: string;
 }
 
-interface AddAssistantDialogProps {
+interface Assistant {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  assignedDoctors: string[];
+  isActive: boolean;
+  status: string;
+  statusColor: string;
+}
+
+interface EditAssistantDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (assistantData: any) => void;
+  assistant: Assistant | null;
   doctors: Doctor[];
   isLoading?: boolean;
 }
 
-export function AddAssistantDialog({ isOpen, onClose, onSubmit, doctors, isLoading = false }: AddAssistantDialogProps) {
+export function EditAssistantDialog({ isOpen, onClose, onSubmit, assistant, doctors, isLoading = false }: EditAssistantDialogProps) {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
-    password: '',
     role: 'assistant',
     assignedDoctors: [] as string[],
     status: ''
@@ -152,6 +171,20 @@ export function AddAssistantDialog({ isOpen, onClose, onSubmit, doctors, isLoadi
   const scrollViewRef = useRef<ScrollView>(null);
   const doctorRef = useRef<View>(null);
   const statusRef = useRef<View>(null);
+
+  // Initialize form data when assistant changes
+  useEffect(() => {
+    if (assistant) {
+      setFormData({
+        name: assistant.name || '',
+        email: assistant.email || '',
+        phone: assistant.phone || '',
+        role: assistant.role || 'assistant',
+        assignedDoctors: assistant.assignedDoctors || [],
+        status: assistant.status === 'Active' ? 'active' : 'inactive'
+      });
+    }
+  }, [assistant]);
 
   const handleInputChange = (field: string, value: string) => {
     // Phone number validation - limit to 13 digits
@@ -198,7 +231,7 @@ export function AddAssistantDialog({ isOpen, onClose, onSubmit, doctors, isLoadi
   };
 
   const handleSubmit = () => {
-    if (!formData.name || !formData.email || !formData.phone || !formData.password || !formData.status) {
+    if (!formData.name || !formData.email || !formData.phone || !formData.status) {
       return;
     }
     onSubmit(formData);
@@ -209,7 +242,6 @@ export function AddAssistantDialog({ isOpen, onClose, onSubmit, doctors, isLoadi
       name: '',
       email: '',
       phone: '',
-      password: '',
       role: 'assistant',
       assignedDoctors: [],
       status: ''
@@ -225,10 +257,17 @@ export function AddAssistantDialog({ isOpen, onClose, onSubmit, doctors, isLoadi
 
   // Reset form when dialog opens
   useEffect(() => {
-    if (isOpen) {
-      resetForm();
+    if (isOpen && assistant) {
+      setFormData({
+        name: assistant.name || '',
+        email: assistant.email || '',
+        phone: assistant.phone || '',
+        role: assistant.role || 'assistant',
+        assignedDoctors: assistant.assignedDoctors || [],
+        status: assistant.status === 'Active' ? 'active' : 'inactive'
+      });
     }
-  }, [isOpen]);
+  }, [isOpen, assistant]);
 
   if (!isOpen) return null;
 
@@ -246,8 +285,8 @@ export function AddAssistantDialog({ isOpen, onClose, onSubmit, doctors, isLoadi
           {/* Header */}
           <View style={styles.header}>
             <View>
-              <ThemedText style={styles.dialogTitle}>Add New Assistant</ThemedText>
-              <ThemedText style={styles.dialogSubtitle}>Fill in the assistant information</ThemedText>
+              <ThemedText style={styles.dialogTitle}>Edit Assistant</ThemedText>
+              <ThemedText style={styles.dialogSubtitle}>Update assistant information</ThemedText>
             </View>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <X />
@@ -310,25 +349,6 @@ export function AddAssistantDialog({ isOpen, onClose, onSubmit, doctors, isLoadi
                     maxLength={13}
                   />
                 </View>
-              </View>
-
-              {/* Password */}
-              <View style={styles.inputGroup}>
-                <ThemedText style={styles.label}>
-                  <User /> Password <ThemedText style={styles.required}>*</ThemedText>
-                </ThemedText>
-                <TextInput
-                  style={styles.input}
-                  value={formData.password}
-                  onChangeText={(value) => handleInputChange('password', value)}
-                  placeholder="Enter password for assistant login"
-                  placeholderTextColor="#9CA3AF"
-                  secureTextEntry
-                  returnKeyType="next"
-                />
-                <ThemedText style={styles.helpText}>
-                  This password will be used for assistant to login to the admin portal
-                </ThemedText>
               </View>
 
               {/* Role */}
@@ -485,13 +505,13 @@ export function AddAssistantDialog({ isOpen, onClose, onSubmit, doctors, isLoadi
                 <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.submitButton, (!formData.name || !formData.email || !formData.phone || !formData.password || !formData.status || isLoading) && styles.submitButtonDisabled]} 
+                style={[styles.submitButton, (!formData.name || !formData.email || !formData.phone || !formData.status || isLoading) && styles.submitButtonDisabled]} 
                 onPress={handleSubmit}
-                disabled={!formData.name || !formData.email || !formData.phone || !formData.password || !formData.status || isLoading}
+                disabled={!formData.name || !formData.email || !formData.phone || !formData.status || isLoading}
               >
-                <UserPlus />
+                <Save />
                 <ThemedText style={styles.submitButtonText}>
-                  {isLoading ? 'Creating...' : 'Add Assistant'}
+                  {isLoading ? 'Updating...' : 'Update Assistant'}
                 </ThemedText>
               </TouchableOpacity>
             </View>
