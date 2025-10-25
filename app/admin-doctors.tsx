@@ -2,10 +2,11 @@ import { AddDoctorDialog } from '@/components/AddDoctorDialog';
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 import { EditDoctorDialog } from '@/components/EditDoctorDialog';
+import { PaginationComponent } from '@/components/PaginationComponent';
 import { ThemedText } from '@/components/themed-text';
 import { ViewDoctorDialog } from '@/components/ViewDoctorDialog';
 import { getCurrentUser } from '@/lib/firebase/auth';
-import { createDocument, deleteDoctor, getAllDoctors, updateDoctor } from '@/lib/firebase/firestore';
+import { createDocument, deleteDoctor, getAllDoctors, getAppointmentsByDoctorAndDate, updateDoctor } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import { Clock, Edit, Eye, Trash2, Users } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
@@ -71,27 +72,58 @@ const UserPlus = () => (
   </Svg>
 );
 
+// Helper function to calculate doctor statistics
+const calculateDoctorStats = async (doctorId: string) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const appointmentsResult = await getAppointmentsByDoctorAndDate(doctorId, today);
+    
+    if (appointmentsResult.success && appointmentsResult.data) {
+      const appointments = appointmentsResult.data;
+      const total = appointments.length;
+      const done = appointments.filter((apt: any) => apt.status === 'completed').length;
+      const waiting = appointments.filter((apt: any) => 
+        apt.status === 'scheduled' || apt.status === 'confirmed' || apt.status === 'checked_in'
+      ).length;
+      
+      return { total, done, waiting };
+    }
+  } catch (error) {
+    console.error('Error calculating doctor stats:', error);
+  }
+  
+  return { total: 0, done: 0, waiting: 0 };
+};
+
 // Helper function to transform doctor data
-const transformDoctorData = (doctors: any[]) => {
-  return doctors.map((doctor: any, index: number) => ({
-    id: doctor.id,
-    name: doctor.user?.name || 'Unknown Doctor',
-    specialty: doctor.specialty || 'General Medicine',
-    status: doctor.status === 'In' ? 'In' : 'Out',
-    consultationDuration: doctor.consultationDuration || 20,
-    assignedAssistants: doctor.assignedAssistants || [],
-    initials: doctor.user?.name ? doctor.user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
-    bgColor: index % 2 === 0 ? 'bg-teal-600' : 'bg-teal-700',
-    statusColor: doctor.status === 'In' ? 'bg-emerald-500' : 'bg-gray-400',
-    stats: { total: 0, done: 0, waiting: 0 }, // Will be calculated from appointments
-    slotDuration: `${doctor.consultationDuration || 20} min slots`,
-    assistants: 'No assistants assigned',
-    online: doctor.isActive,
-    phone: doctor.user?.phone || 'N/A',
-    email: doctor.user?.email || 'N/A',
-    schedule: 'Mon-Fri, 9:00 AM - 5:00 PM',
-    room: 'Room 101'
-  }));
+const transformDoctorData = async (doctors: any[]) => {
+  const transformedDoctors = await Promise.all(
+    doctors.map(async (doctor: any, index: number) => {
+      const stats = await calculateDoctorStats(doctor.id);
+      
+      return {
+        id: doctor.id,
+        name: doctor.user?.name || 'Unknown Doctor',
+        specialty: doctor.specialty || 'General Medicine',
+        status: doctor.status === 'In' ? 'In' : 'Out',
+        consultationDuration: doctor.consultationDuration || 20,
+        assignedAssistants: doctor.assignedAssistants || [],
+        initials: doctor.user?.name ? doctor.user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
+        bgColor: index % 2 === 0 ? 'bg-teal-600' : 'bg-teal-700',
+        statusColor: doctor.status === 'In' ? 'bg-emerald-500' : 'bg-gray-400',
+        stats: stats,
+        slotDuration: `${doctor.consultationDuration || 20} min slots`,
+        assistants: 'No assistants assigned',
+        online: doctor.isActive,
+        phone: doctor.user?.phone || 'N/A',
+        email: doctor.user?.email || 'N/A',
+        schedule: 'Mon-Fri, 9:00 AM - 5:00 PM',
+        room: 'Room 101'
+      };
+    })
+  );
+  
+  return transformedDoctors;
 };
 
 export default function AdminDoctors() {
@@ -105,6 +137,8 @@ export default function AdminDoctors() {
   const [isLoading, setIsLoading] = useState(false);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage] = useState<number>(6);
 
   // Load doctors data
   useEffect(() => {
@@ -118,7 +152,7 @@ export default function AdminDoctors() {
           console.log('Admin Doctors - Doctors Result:', doctorsResult);
           if (doctorsResult.success && doctorsResult.data) {
             // Transform the data to match web app format
-            const transformedDoctors = transformDoctorData(doctorsResult.data);
+            const transformedDoctors = await transformDoctorData(doctorsResult.data);
             setDoctors(transformedDoctors);
           } else {
             console.log('Admin Doctors - Failed to load doctors, using fallback data');
@@ -254,7 +288,7 @@ export default function AdminDoctors() {
         // Reload doctors
         const doctorsResult = await getAllDoctors();
         if (doctorsResult.success && doctorsResult.data) {
-          const transformedDoctors = transformDoctorData(doctorsResult.data);
+          const transformedDoctors = await transformDoctorData(doctorsResult.data);
           setDoctors(transformedDoctors);
         }
       } else {
@@ -297,7 +331,7 @@ export default function AdminDoctors() {
         // Reload doctors
         const doctorsResult = await getAllDoctors();
         if (doctorsResult.success && doctorsResult.data) {
-          const transformedDoctors = transformDoctorData(doctorsResult.data);
+          const transformedDoctors = await transformDoctorData(doctorsResult.data);
           setDoctors(transformedDoctors);
         }
       } else {
@@ -325,7 +359,7 @@ export default function AdminDoctors() {
         // Reload doctors
         const doctorsResult = await getAllDoctors();
         if (doctorsResult.success && doctorsResult.data) {
-          const transformedDoctors = transformDoctorData(doctorsResult.data);
+          const transformedDoctors = await transformDoctorData(doctorsResult.data);
           setDoctors(transformedDoctors);
         }
       } else {
@@ -344,6 +378,35 @@ export default function AdminDoctors() {
     setIsEditDialogOpen(false);
     setIsDeleteDialogOpen(false);
     setSelectedDoctor(null);
+  };
+
+  // Get paginated doctors
+  const getPaginatedDoctors = (doctors: any[]) => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return doctors.slice(startIndex, endIndex);
+  };
+
+  // Get total pages
+  const getTotalPages = (doctors: any[]) => {
+    return Math.ceil(doctors.length / itemsPerPage);
+  };
+
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // Handle double page navigation
+  const handleDoublePageChange = (direction: 'prev' | 'next') => {
+    const totalPages = getTotalPages(doctors);
+    if (direction === 'prev') {
+      const newPage = Math.max(1, currentPage - 2);
+      setCurrentPage(newPage);
+    } else {
+      const newPage = Math.min(totalPages, currentPage + 2);
+      setCurrentPage(newPage);
+    }
   };
 
   return (
@@ -384,7 +447,7 @@ export default function AdminDoctors() {
         <View style={styles.content}>
           {/* Doctor Cards */}
           <View style={styles.doctorsGrid}>
-            {doctors.map((doctor) => (
+            {getPaginatedDoctors(doctors).map((doctor) => (
               <View key={doctor.id} style={styles.doctorCard}>
                 <View style={styles.doctorHeader}>
                   <View style={styles.doctorAvatarContainer}>
@@ -466,6 +529,16 @@ export default function AdminDoctors() {
               </View>
             ))}
           </View>
+
+          {/* Pagination Controls */}
+          <PaginationComponent
+            currentPage={currentPage}
+            totalPages={getTotalPages(doctors)}
+            totalItems={doctors.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={handlePageChange}
+            onDoublePageChange={handleDoublePageChange}
+          />
         </View>
       </ScrollView>
 

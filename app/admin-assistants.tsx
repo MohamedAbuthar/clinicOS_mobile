@@ -1,8 +1,11 @@
 import { AddAssistantDialog } from '@/components/AddAssistantDialog';
 import { AdminSidebar } from '@/components/AdminSidebar';
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
+import { EditAssistantDialog } from '@/components/EditAssistantDialog';
+import { PaginationComponent } from '@/components/PaginationComponent';
 import { ThemedText } from '@/components/themed-text';
 import { getCurrentUser } from '@/lib/firebase/auth';
-import { getAllDoctors, getDocuments } from '@/lib/firebase/firestore';
+import { createDocument, deleteDocument, getAllDoctors, getDocuments, updateDocument } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import { Edit, Trash2, Users } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
@@ -45,10 +48,15 @@ export default function AdminAssistants() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedAssistant, setSelectedAssistant] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [assistants, setAssistants] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage] = useState<number>(6);
 
   // Load assistants data
   useEffect(() => {
@@ -74,51 +82,12 @@ export default function AdminAssistants() {
               initials: assistant.name ? assistant.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
               isActive: assistant.isActive !== false,
               status: assistant.isActive !== false ? 'Active' : 'Inactive',
-              statusColor: assistant.isActive !== false ? '#10B981' : '#6B7280'
+              statusColor: assistant.isActive !== false ? '#10B981' : '#DC2626'
             }));
             setAssistants(transformedAssistants);
           } else {
-            console.log('Admin Assistants - Failed to load assistants, using fallback data');
-            // Fallback data matching your web app
-            const fallbackAssistants = [
-              {
-                id: '1',
-                name: 'thalha..',
-                email: 'test12@gmail.com',
-                phone: '0987654321',
-                role: 'assistant',
-                assignedDoctors: ['Mohamed Abuthar'],
-                initials: 'T',
-                isActive: true,
-                status: 'Active',
-                statusColor: '#10B981'
-              },
-              {
-                id: '2',
-                name: 'dani',
-                email: 'dani@gmail.com',
-                phone: '1234567890',
-                role: 'assistant',
-                assignedDoctors: ['haseeb...', 'Riya'],
-                initials: 'D',
-                isActive: true,
-                status: 'Active',
-                statusColor: '#10B981'
-              },
-              {
-                id: '3',
-                name: 'Mohamed Abutharlkjuhygf',
-                email: 'master20@gmail.com',
-                phone: '+918012222817',
-                role: 'assistant',
-                assignedDoctors: [],
-                initials: 'MA',
-                isActive: true,
-                status: 'Active',
-                statusColor: '#10B981'
-              }
-            ];
-            setAssistants(fallbackAssistants);
+            console.log('Admin Assistants - Failed to load assistants from database');
+            setAssistants([]);
           }
           
           // Load doctors for the dialog
@@ -151,16 +120,199 @@ export default function AdminAssistants() {
   const handleAddAssistant = async (assistantData: any) => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      console.log('Adding assistant:', assistantData);
-      setIsAddDialogOpen(false);
-      // Here you would typically call your API to create the assistant
+      // Create user document
+      const userDoc = {
+        name: assistantData.name,
+        email: assistantData.email,
+        phone: assistantData.phone,
+        role: 'assistant',
+        isActive: assistantData.status === 'active',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const userResult = await createDocument('users', userDoc);
+      
+      if (!userResult.success) {
+        Alert.alert('Error', 'Failed to create assistant account. Please try again.');
+        return;
+      }
+
+      // Create assistant document with userId reference
+      const assistantDoc = {
+        userId: userResult.id, // Reference to the user document
+        assignedDoctors: assistantData.assignedDoctors || [],
+        isActive: assistantData.status === 'active',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const assistantResult = await createDocument('assistants', assistantDoc);
+      
+      if (assistantResult.success) {
+        Alert.alert('Success', 'Assistant added successfully!');
+        setIsAddDialogOpen(false);
+        // Reload assistants
+        const usersResult = await getDocuments('users');
+        if (usersResult.success && usersResult.data) {
+          const assistantUsers = usersResult.data.filter((user: any) => user.role === 'assistant');
+          const transformedAssistants = assistantUsers.map((assistant: any) => ({
+            id: assistant.id,
+            name: assistant.name || 'Unknown Assistant',
+            email: assistant.email || 'N/A',
+            phone: assistant.phone || 'N/A',
+            role: assistant.role,
+            assignedDoctors: [],
+            initials: assistant.name ? assistant.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
+            isActive: assistant.isActive !== false,
+            status: assistant.isActive !== false ? 'Active' : 'Inactive',
+            statusColor: assistant.isActive !== false ? '#10B981' : '#DC2626'
+          }));
+          setAssistants(transformedAssistants);
+        }
+      } else {
+        Alert.alert('Error', 'Failed to add assistant. Please try again.');
+      }
     } catch (error) {
       console.error('Error adding assistant:', error);
+      Alert.alert('Error', 'Failed to add assistant. Please try again.');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Get paginated assistants
+  const getPaginatedAssistants = (assistants: any[]) => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return assistants.slice(startIndex, endIndex);
+  };
+
+  // Get total pages
+  const getTotalPages = (assistants: any[]) => {
+    return Math.ceil(assistants.length / itemsPerPage);
+  };
+
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // Handle double page navigation
+  const handleDoublePageChange = (direction: 'prev' | 'next') => {
+    const totalPages = getTotalPages(assistants);
+    if (direction === 'prev') {
+      const newPage = Math.max(1, currentPage - 2);
+      setCurrentPage(newPage);
+    } else {
+      const newPage = Math.min(totalPages, currentPage + 2);
+      setCurrentPage(newPage);
+    }
+  };
+
+  const handleEditAssistant = (assistant: any) => {
+    setSelectedAssistant(assistant);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDeleteAssistant = (assistant: any) => {
+    setSelectedAssistant(assistant);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleEditAssistantSubmit = async (assistantData: any) => {
+    if (!selectedAssistant) return;
+    
+    setIsLoading(true);
+    try {
+      // Update user document
+      const userUpdateData = {
+        name: assistantData.name,
+        email: assistantData.email,
+        phone: assistantData.phone,
+        isActive: assistantData.status === 'active',
+        updatedAt: new Date(),
+      };
+
+      const userResult = await updateDocument('users', selectedAssistant.id, userUpdateData);
+      
+      if (userResult.success) {
+        Alert.alert('Success', 'Assistant updated successfully!');
+        setIsEditDialogOpen(false);
+        setSelectedAssistant(null);
+        // Reload assistants
+        const usersResult = await getDocuments('users');
+        if (usersResult.success && usersResult.data) {
+          const assistantUsers = usersResult.data.filter((user: any) => user.role === 'assistant');
+          const transformedAssistants = assistantUsers.map((assistant: any) => ({
+            id: assistant.id,
+            name: assistant.name || 'Unknown Assistant',
+            email: assistant.email || 'N/A',
+            phone: assistant.phone || 'N/A',
+            role: assistant.role,
+            assignedDoctors: [],
+            initials: assistant.name ? assistant.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
+            isActive: assistant.isActive !== false,
+            status: assistant.isActive !== false ? 'Active' : 'Inactive',
+            statusColor: assistant.isActive !== false ? '#10B981' : '#DC2626'
+          }));
+          setAssistants(transformedAssistants);
+        }
+      } else {
+        Alert.alert('Error', userResult.error || 'Failed to update assistant. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error updating assistant:', error);
+      Alert.alert('Error', 'Failed to update assistant. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedAssistant) return;
+    
+    setIsLoading(true);
+    try {
+      const result = await deleteDocument('users', selectedAssistant.id);
+      
+      if (result.success) {
+        Alert.alert('Success', 'Assistant deleted successfully!');
+        setIsDeleteDialogOpen(false);
+        setSelectedAssistant(null);
+        // Reload assistants
+        const usersResult = await getDocuments('users');
+        if (usersResult.success && usersResult.data) {
+          const assistantUsers = usersResult.data.filter((user: any) => user.role === 'assistant');
+          const transformedAssistants = assistantUsers.map((assistant: any) => ({
+            id: assistant.id,
+            name: assistant.name || 'Unknown Assistant',
+            email: assistant.email || 'N/A',
+            phone: assistant.phone || 'N/A',
+            role: assistant.role,
+            assignedDoctors: [],
+            initials: assistant.name ? assistant.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
+            isActive: assistant.isActive !== false,
+            status: assistant.isActive !== false ? 'Active' : 'Inactive',
+            statusColor: assistant.isActive !== false ? '#10B981' : '#DC2626'
+          }));
+          setAssistants(transformedAssistants);
+        }
+      } else {
+        Alert.alert('Error', result.error || 'Failed to delete assistant. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error deleting assistant:', error);
+      Alert.alert('Error', 'Failed to delete assistant. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const closeAllDialogs = () => {
+    setIsEditDialogOpen(false);
+    setIsDeleteDialogOpen(false);
+    setSelectedAssistant(null);
   };
 
   return (
@@ -199,7 +351,7 @@ export default function AdminAssistants() {
         <View style={styles.content}>
           {/* Assistant Cards */}
           <View style={styles.assistantsList}>
-            {assistants.map((assistant) => (
+            {getPaginatedAssistants(assistants).map((assistant) => (
               <View key={assistant.id} style={styles.assistantCard}>
                 <View style={styles.assistantHeader}>
                   <View style={styles.assistantAvatar}>
@@ -236,11 +388,17 @@ export default function AdminAssistants() {
                   <TouchableOpacity style={[styles.actionButton, { backgroundColor: assistant.statusColor }]}>
                     <ThemedText style={styles.actionText}>{assistant.status}</ThemedText>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.actionButton}>
+                  <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={() => handleEditAssistant(assistant)}
+                  >
                     <Edit size={16} color="#6B7280" />
                     <ThemedText style={styles.actionText}>Edit</ThemedText>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.actionButton}>
+                  <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={() => handleDeleteAssistant(assistant)}
+                  >
                     <Trash2 size={16} color="#DC2626" />
                     <ThemedText style={styles.actionText}>Delete</ThemedText>
                   </TouchableOpacity>
@@ -248,6 +406,16 @@ export default function AdminAssistants() {
               </View>
             ))}
           </View>
+
+          {/* Pagination Controls */}
+          <PaginationComponent
+            currentPage={currentPage}
+            totalPages={getTotalPages(assistants)}
+            totalItems={assistants.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={handlePageChange}
+            onDoublePageChange={handleDoublePageChange}
+          />
         </View>
       </ScrollView>
 
@@ -257,6 +425,27 @@ export default function AdminAssistants() {
         onClose={() => setIsAddDialogOpen(false)}
         onSubmit={handleAddAssistant}
         doctors={doctors}
+        isLoading={isLoading}
+      />
+
+      {/* Edit Assistant Dialog */}
+      <EditAssistantDialog
+        isOpen={isEditDialogOpen}
+        onClose={closeAllDialogs}
+        assistant={selectedAssistant}
+        onSubmit={handleEditAssistantSubmit}
+        doctors={doctors}
+        isLoading={isLoading}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmationDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={closeAllDialogs}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Assistant"
+        message="Are you sure you want to delete this assistant? This will permanently remove the assistant and all associated data."
+        itemName={selectedAssistant?.name}
         isLoading={isLoading}
       />
     </SafeAreaView>

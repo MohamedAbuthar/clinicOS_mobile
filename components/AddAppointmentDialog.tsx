@@ -119,6 +119,9 @@ interface Doctor {
   id: string;
   name: string;
   specialty: string;
+  user?: {
+    name: string;
+  };
 }
 
 interface AddAppointmentDialogProps {
@@ -149,6 +152,16 @@ export function AddAppointmentDialog({ isOpen, onClose, onSubmit, doctors, isLoa
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handlePhoneChange = (value: string) => {
+    // Remove all non-numeric characters
+    const numericValue = value.replace(/\D/g, '');
+    
+    // Limit to 13 digits
+    if (numericValue.length <= 13) {
+      setFormData(prev => ({ ...prev, phone: numericValue }));
+    }
   };
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
@@ -273,7 +286,7 @@ export function AddAppointmentDialog({ isOpen, onClose, onSubmit, doctors, isLoa
                   Patient Name <ThemedText style={styles.required}>*</ThemedText>
                 </ThemedText>
                 <View style={styles.inputWithIcon}>
-                  <User style={styles.inputIcon} />
+                  <User />
                   <TextInput
                     style={styles.input}
                     value={formData.patientName}
@@ -291,21 +304,22 @@ export function AddAppointmentDialog({ isOpen, onClose, onSubmit, doctors, isLoa
                     Phone Number <ThemedText style={styles.required}>*</ThemedText>
                   </ThemedText>
                   <View style={styles.inputWithIcon}>
-                    <Phone style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.input}
-                      value={formData.phone}
-                      onChangeText={(value) => handleInputChange('phone', value)}
-                      placeholder="+91 98765 43210"
-                      placeholderTextColor="#9CA3AF"
-                      keyboardType="phone-pad"
-                    />
+                    <Phone />
+                     <TextInput
+                       style={styles.input}
+                       value={formData.phone}
+                       onChangeText={handlePhoneChange}
+                       placeholder="Enter phone number"
+                       placeholderTextColor="#9CA3AF"
+                       keyboardType="phone-pad"
+                       maxLength={13}
+                     />
                   </View>
                 </View>
                 <View style={[styles.inputGroup, styles.halfWidth]}>
                   <ThemedText style={styles.label}>Email</ThemedText>
                   <View style={styles.inputWithIcon}>
-                    <Mail style={styles.inputIcon} />
+                    <Mail />
                     <TextInput
                       style={styles.input}
                       value={formData.email}
@@ -384,7 +398,7 @@ export function AddAppointmentDialog({ isOpen, onClose, onSubmit, doctors, isLoa
                   style={styles.inputWithIcon}
                   onPress={() => setShowDatePicker(true)}
                 >
-                  <Calendar style={styles.inputIcon} />
+                  <Calendar />
                   <ThemedText style={[styles.input, formData.date ? styles.inputText : styles.placeholderText]}>
                     {formData.date || 'YYYY-MM-DD'}
                   </ThemedText>
@@ -398,7 +412,7 @@ export function AddAppointmentDialog({ isOpen, onClose, onSubmit, doctors, isLoa
                   style={styles.inputWithIcon}
                   onPress={() => setShowTimePicker(true)}
                 >
-                  <Clock style={styles.inputIcon} />
+                  <Clock />
                   <ThemedText style={[styles.input, formData.time ? styles.inputText : styles.placeholderText]}>
                     {formData.time || 'HH:MM'}
                   </ThemedText>
@@ -568,13 +582,6 @@ const styles = StyleSheet.create({
     borderColor: '#D1D5DB',
     borderRadius: 8,
     backgroundColor: '#FFFFFF',
-  },
-  inputIcon: {
-    marginLeft: 12,
-    marginRight: 12,
-    width: 20,
-    height: 20,
-    color: '#9CA3AF',
   },
   input: {
     flex: 1,
