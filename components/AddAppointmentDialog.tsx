@@ -312,7 +312,7 @@ export function AddAppointmentDialog({ isOpen, onClose, onSubmit, doctors, isLoa
                     <ThemedText style={styles.countryCodeText}>+91</ThemedText>
                   </View>
                   <View style={[styles.inputWithIcon, styles.phoneInput]}>
-                    <Phone />
+                   
                     <TextInput
                       style={styles.input}
                       value={phoneNumber}
