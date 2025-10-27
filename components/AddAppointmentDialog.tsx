@@ -143,6 +143,8 @@ export function AddAppointmentDialog({ isOpen, onClose, onSubmit, doctors, isLoa
     notes: ''
   });
 
+  const [phoneNumber, setPhoneNumber] = useState('');
+
   // Picker states
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -158,9 +160,11 @@ export function AddAppointmentDialog({ isOpen, onClose, onSubmit, doctors, isLoa
     // Remove all non-numeric characters
     const numericValue = value.replace(/\D/g, '');
     
-    // Limit to 13 digits
-    if (numericValue.length <= 13) {
-      setFormData(prev => ({ ...prev, phone: numericValue }));
+    // Limit to 10 digits (for numbers after +91)
+    if (numericValue.length <= 10) {
+      setPhoneNumber(numericValue);
+      // Store with country code in formData
+      setFormData(prev => ({ ...prev, phone: `+91${numericValue}` }));
     }
   };
 
@@ -225,6 +229,7 @@ export function AddAppointmentDialog({ isOpen, onClose, onSubmit, doctors, isLoa
       time: '',
       notes: ''
     });
+    setPhoneNumber('');
     setShowDatePicker(false);
     setShowTimePicker(false);
     setShowDoctorPicker(false);
@@ -297,39 +302,44 @@ export function AddAppointmentDialog({ isOpen, onClose, onSubmit, doctors, isLoa
                 </View>
               </View>
 
-              {/* Phone and Email */}
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, styles.halfWidth]}>
-                  <ThemedText style={styles.label}>
-                    Phone Number <ThemedText style={styles.required}>*</ThemedText>
-                  </ThemedText>
-                  <View style={styles.inputWithIcon}>
-                    <Phone />
-                     <TextInput
-                       style={styles.input}
-                       value={formData.phone}
-                       onChangeText={handlePhoneChange}
-                       placeholder="Enter phone number"
-                       placeholderTextColor="#9CA3AF"
-                       keyboardType="phone-pad"
-                       maxLength={13}
-                     />
+              {/* Phone Number */}
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.label}>
+                  Phone Number <ThemedText style={styles.required}>*</ThemedText>
+                </ThemedText>
+                <View style={styles.phoneInputContainer}>
+                  <View style={styles.countryCode}>
+                    <ThemedText style={styles.countryCodeText}>+91</ThemedText>
                   </View>
-                </View>
-                <View style={[styles.inputGroup, styles.halfWidth]}>
-                  <ThemedText style={styles.label}>Email</ThemedText>
-                  <View style={styles.inputWithIcon}>
-                    <Mail />
+                  <View style={[styles.inputWithIcon, styles.phoneInput]}>
+                    <Phone />
                     <TextInput
                       style={styles.input}
-                      value={formData.email}
-                      onChangeText={(value) => handleInputChange('email', value)}
-                      placeholder="patient@example.com"
+                      value={phoneNumber}
+                      onChangeText={handlePhoneChange}
+                      placeholder="1234567890"
                       placeholderTextColor="#9CA3AF"
-                      keyboardType="email-address"
-                      autoCapitalize="none"
+                      keyboardType="phone-pad"
+                      maxLength={10}
                     />
                   </View>
+                </View>
+              </View>
+
+              {/* Email */}
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.label}>Email</ThemedText>
+                <View style={styles.inputWithIcon}>
+                  <Mail />
+                  <TextInput
+                    style={styles.input}
+                    value={formData.email}
+                    onChangeText={(value) => handleInputChange('email', value)}
+                    placeholder="patient@example.com"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
                 </View>
               </View>
 
@@ -565,6 +575,27 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   halfWidth: {
+    flex: 1,
+  },
+  phoneInputContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  countryCode: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    minWidth: 50,
+  },
+  countryCodeText: {
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '500',
+  },
+  phoneInput: {
     flex: 1,
   },
   label: {

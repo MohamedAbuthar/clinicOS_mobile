@@ -1,5 +1,6 @@
+import DateTimePicker from '@react-native-community/datetimepicker';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { Path, Svg } from 'react-native-svg';
 import { ThemedText } from './themed-text';
 
@@ -84,6 +85,12 @@ export function AddOverrideDialog({ isOpen, onClose, onSave, isLoading = false }
   });
 
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedStartTime, setSelectedStartTime] = useState(new Date());
+  const [selectedEndTime, setSelectedEndTime] = useState(new Date());
 
   // Initialize with current date when dialog opens
   useEffect(() => {
@@ -100,6 +107,39 @@ export function AddOverrideDialog({ isOpen, onClose, onSave, isLoading = false }
 
   const handleInputChange = (field: keyof OverrideData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setSelectedDate(selectedDate);
+      const formattedDate = selectedDate.toISOString().split('T')[0];
+      setFormData(prev => ({ ...prev, date: formattedDate }));
+    }
+  };
+
+  const handleStartTimeChange = (event: any, selectedTime?: Date) => {
+    setShowStartTimePicker(Platform.OS === 'ios');
+    if (selectedTime) {
+      setSelectedStartTime(selectedTime);
+      const hours = selectedTime.getHours().toString().padStart(2, '0');
+      const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
+      const formattedTime = `${hours}:${minutes}`;
+      const endTime = formData.timeRange.split(' - ')[1] || '';
+      setFormData(prev => ({ ...prev, timeRange: `${formattedTime} - ${endTime}` }));
+    }
+  };
+
+  const handleEndTimeChange = (event: any, selectedTime?: Date) => {
+    setShowEndTimePicker(Platform.OS === 'ios');
+    if (selectedTime) {
+      setSelectedEndTime(selectedTime);
+      const hours = selectedTime.getHours().toString().padStart(2, '0');
+      const minutes = selectedTime.getMinutes().toString().padStart(2, '0');
+      const formattedTime = `${hours}:${minutes}`;
+      const startTime = formData.timeRange.split(' - ')[0] || '';
+      setFormData(prev => ({ ...prev, timeRange: `${startTime} - ${formattedTime}` }));
+    }
   };
 
   const handleTimeRangeChange = (field: 'start' | 'end', value: string) => {
@@ -158,7 +198,7 @@ export function AddOverrideDialog({ isOpen, onClose, onSave, isLoading = false }
         <View style={styles.dialog}>
           {/* Header */}
           <View style={styles.header}>
-            <ThemedText style={styles.title}>Add Schedule Override</ThemedText>
+            <ThemedText style={styles.title}>Add Schedule Holiday</ThemedText>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <X />
             </TouchableOpacity>
@@ -185,14 +225,21 @@ export function AddOverrideDialog({ isOpen, onClose, onSave, isLoading = false }
               <ThemedText style={styles.label}>
                 <Calendar /> Date <ThemedText style={styles.required}>*</ThemedText>
               </ThemedText>
-              <TextInput
+              <TouchableOpacity
                 style={styles.input}
-                value={formData.date}
-                onChangeText={(value) => handleInputChange('date', value)}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="numeric"
-              />
+                onPress={() => setShowDatePicker(true)}
+              >
+                <ThemedText style={styles.inputText}>{formData.date || 'Select date'}</ThemedText>
+              </TouchableOpacity>
+              {showDatePicker && (
+                <DateTimePicker
+                  value={selectedDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleDateChange}
+                  minimumDate={new Date()}
+                />
+              )}
             </View>
 
             {/* Time Range */}
@@ -201,22 +248,38 @@ export function AddOverrideDialog({ isOpen, onClose, onSave, isLoading = false }
                 <Clock /> Time Range
               </ThemedText>
               <View style={styles.timeRangeContainer}>
-                <TextInput
+                <TouchableOpacity
                   style={[styles.input, styles.timeInput]}
-                  value={formData.timeRange.split(' - ')[0] || ''}
-                  onChangeText={(value) => handleTimeRangeChange('start', value)}
-                  placeholder="09:00"
-                  placeholderTextColor="#9CA3AF"
-                />
+                  onPress={() => setShowStartTimePicker(true)}
+                >
+                  <ThemedText style={styles.inputText}>{formData.timeRange.split(' - ')[0] || 'From'}</ThemedText>
+                </TouchableOpacity>
                 <ThemedText style={styles.timeSeparator}>to</ThemedText>
-                <TextInput
+                <TouchableOpacity
                   style={[styles.input, styles.timeInput]}
-                  value={formData.timeRange.split(' - ')[1] || ''}
-                  onChangeText={(value) => handleTimeRangeChange('end', value)}
-                  placeholder="17:00"
-                  placeholderTextColor="#9CA3AF"
-                />
+                  onPress={() => setShowEndTimePicker(true)}
+                >
+                  <ThemedText style={styles.inputText}>{formData.timeRange.split(' - ')[1] || 'To'}</ThemedText>
+                </TouchableOpacity>
               </View>
+              {showStartTimePicker && (
+                <DateTimePicker
+                  value={selectedStartTime}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleStartTimeChange}
+                  is24Hour={false}
+                />
+              )}
+              {showEndTimePicker && (
+                <DateTimePicker
+                  value={selectedEndTime}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleEndTimeChange}
+                  is24Hour={false}
+                />
+              )}
               <ThemedText style={styles.hintText}>Leave empty for full day</ThemedText>
             </View>
 
@@ -283,7 +346,7 @@ export function AddOverrideDialog({ isOpen, onClose, onSave, isLoading = false }
               disabled={isLoading}
             >
               <ThemedText style={styles.saveButtonText}>
-                {isLoading ? 'Adding...' : 'Add Override'}
+                {isLoading ? 'Adding...' : 'Add Holiday'}
               </ThemedText>
             </TouchableOpacity>
           </View>
@@ -392,14 +455,14 @@ const styles = StyleSheet.create({
   },
   dropdownMenu: {
     position: 'absolute',
-    top: '100%',
+    bottom: '100%',
     left: 0,
     right: 0,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#D1D5DB',
     borderRadius: 8,
-    marginTop: 4,
+    marginBottom: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -414,6 +477,10 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F3F4F6',
   },
   dropdownItemText: {
+    fontSize: 16,
+    color: '#111827',
+  },
+  inputText: {
     fontSize: 16,
     color: '#111827',
   },

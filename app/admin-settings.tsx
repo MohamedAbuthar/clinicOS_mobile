@@ -1,13 +1,15 @@
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { ThemedText } from '@/components/themed-text';
-import { getCurrentUser, signOutUser } from '@/lib/firebase/auth';
-import { getDocuments } from '@/lib/firebase/firestore';
+import { getCurrentUser, signOut } from '@/lib/firebase/auth';
+import { db } from '@/lib/firebase/config';
+import { getDocument } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
+import { collection, getDocs, limit, orderBy, query, Timestamp } from 'firebase/firestore';
+import { AlertCircle, RefreshCw, Shield, User } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View, RefreshControl } from 'react-native';
+import { Alert, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
-import { Shield, User, RefreshCw, AlertCircle, Settings as SettingsIcon, Bell, Database, Users } from 'lucide-react-native';
 
 const Menu = () => (
   <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
@@ -37,33 +39,59 @@ export default function AdminSettings() {
       try {
         const currentUser = getCurrentUser();
         if (currentUser) {
-          setUser(currentUser);
+          // Load user profile from Firestore
+          const userResult = await getDocument('users', currentUser.uid);
+          if (userResult.success && userResult.data) {
+            setUser(userResult.data);
+          } else {
+            // Fallback to Firebase user if Firestore data not found
+            setUser({
+              name: currentUser.displayName || 'Admin User',
+              email: currentUser.email || '',
+              role: 'admin'
+            });
+          }
           
-          // Load audit logs (simulated)
-          const mockAuditLogs = [
-            {
-              id: '1',
-              action: 'User Login',
-              user: 'Admin User',
-              timestamp: new Date().toISOString(),
-              details: 'Successful login from mobile app',
-            },
-            {
-              id: '2',
-              action: 'Doctor Added',
-              user: 'Admin User',
-              timestamp: new Date(Date.now() - 3600000).toISOString(),
-              details: 'Added new doctor: Dr. John Smith',
-            },
-            {
-              id: '3',
-              action: 'Appointment Created',
-              user: 'Admin User',
-              timestamp: new Date(Date.now() - 7200000).toISOString(),
-              details: 'Created appointment for patient: Jane Doe',
-            },
-          ];
-          setAuditLogs(mockAuditLogs);
+          // Load real audit logs from Firestore
+          try {
+            const q = query(
+              collection(db, 'auditLogs'),
+              orderBy('timestamp', 'desc'),
+              limit(20)
+            );
+            
+            const snapshot = await getDocs(q);
+            const logs = snapshot.docs.map(doc => {
+              const data = doc.data();
+              
+              // Convert Firestore Timestamp to readable string
+              let timestampString = 'Unknown';
+              if (data.timestamp) {
+                try {
+                  const timestamp = data.timestamp instanceof Timestamp 
+                    ? data.timestamp.toDate() 
+                    : new Date(data.timestamp);
+                  timestampString = timestamp.toLocaleString();
+                } catch (e) {
+                  console.error('Error converting timestamp:', e);
+                }
+              }
+              
+              return {
+                id: doc.id,
+                action: data.action || 'Unknown action',
+                user: data.user || data.userId || 'Unknown user',
+                timestamp: timestampString,
+                details: data.details || '',
+              };
+            });
+            
+            setAuditLogs(logs);
+          } catch (auditError) {
+            console.error('Error loading audit logs:', auditError);
+            // Set empty array if audit logs fail to load
+            setAuditLogs([]);
+          }
         } else {
           router.push('/auth-login');
         }
@@ -76,8 +104,8 @@ export default function AdminSettings() {
     loadData();
   }, [router]);
 
-  const handleLogout = () => {
-    signOutUser();
+  const handleLogout = async () => {
+    await signOut();
     router.push('/auth-login');
   };
   
@@ -88,11 +116,53 @@ export default function AdminSettings() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      // Simulate refresh
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Refresh user data from Firestore
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        const userResult = await getDocument('users', currentUser.uid);
+        if (userResult.success && userResult.data) {
+          setUser(userResult.data);
+        }
+        
+        // Refresh audit logs
+        const q = query(
+          collection(db, 'auditLogs'),
+          orderBy('timestamp', 'desc'),
+          limit(20)
+        );
+        
+        const snapshot = await getDocs(q);
+        const logs = snapshot.docs.map(doc => {
+          const data = doc.data();
+          
+          let timestampString = 'Unknown';
+          if (data.timestamp) {
+            try {
+              const timestamp = data.timestamp instanceof Timestamp 
+                ? data.timestamp.toDate() 
+                : new Date(data.timestamp);
+              timestampString = timestamp.toLocaleString();
+            } catch (e) {
+              console.error('Error converting timestamp:', e);
+            }
+          }
+          
+          return {
+            id: doc.id,
+            action: data.action || 'Unknown action',
+            user: data.user || data.userId || 'Unknown user',
+            timestamp: timestampString,
+            details: data.details || '',
+          };
+        });
+        
+        setAuditLogs(logs);
+      }
       setSuccessMessage('Settings refreshed successfully');
+      setTimeout(() => setSuccessMessage(null), 3000);
     } catch (error) {
       setError('Failed to refresh settings');
+      setTimeout(() => setError(null), 3000);
     } finally {
       setRefreshing(false);
     }
@@ -212,38 +282,6 @@ export default function AdminSettings() {
                   </ThemedText>
                 </View>
               </View>
-            </View>
-          </View>
-
-          {/* System Settings */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <SettingsIcon size={20} color="#059669" />
-              <ThemedText style={styles.sectionTitle}>System Settings</ThemedText>
-            </View>
-            
-            <View style={styles.settingsList}>
-              <SettingItem
-                icon={Bell}
-                title="Notifications"
-                subtitle="Manage notification preferences"
-                color="#3B82F6"
-                onPress={() => handleSystemAction('Notifications')}
-              />
-              <SettingItem
-                icon={Database}
-                title="Database"
-                subtitle="Backup and restore data"
-                color="#10B981"
-                onPress={() => handleSystemAction('Database')}
-              />
-              <SettingItem
-                icon={Users}
-                title="User Management"
-                subtitle="Manage user accounts and permissions"
-                color="#F59E0B"
-                onPress={() => handleSystemAction('User Management')}
-              />
             </View>
           </View>
 
