@@ -526,7 +526,7 @@ export default function AdminAssistants() {
                           <ThemedText style={styles.doctorTagText}>{doctorName}</ThemedText>
                         </View>
                       ))}
-                    </View>
+                  </View>
                   ) : (
                     <ThemedText style={styles.noDoctorsText}>None</ThemedText>
                   )}
