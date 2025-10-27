@@ -5,7 +5,7 @@ import { EditAssistantDialog } from '@/components/EditAssistantDialog';
 import { PaginationComponent } from '@/components/PaginationComponent';
 import { ThemedText } from '@/components/themed-text';
 import { getCurrentUser } from '@/lib/firebase/auth';
-import { createDocument, deleteDocument, getAllDoctors, getDocuments, updateDocument } from '@/lib/firebase/firestore';
+import { createDocument, deleteDocument, getAllDoctors, getDocument, getDocuments, updateDocument } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import { Edit, Trash2, Users } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
@@ -66,24 +66,64 @@ export default function AdminAssistants() {
         if (currentUser) {
           setUser(currentUser);
           
-          // Load assistants from users collection (role: assistant)
+          // Load assistants collection to get assigned doctors
+          const assistantsResult = await getDocuments('assistants');
+          console.log('Admin Assistants - Assistants Collection Result:', assistantsResult);
+          
+          // Load users collection to get user details
           const usersResult = await getDocuments('users');
-          console.log('Admin Assistants - Users Result:', usersResult);
-          if (usersResult.success && usersResult.data) {
+          console.log('Admin Assistants - Users Collection Result:', usersResult);
+          
+          if (assistantsResult.success && assistantsResult.data && usersResult.success && usersResult.data) {
             const assistantUsers = usersResult.data.filter((user: any) => user.role === 'assistant');
-            // Transform the data to match web app format
-            const transformedAssistants = assistantUsers.map((assistant: any) => ({
-              id: assistant.id,
-              name: assistant.name || 'Unknown Assistant',
-              email: assistant.email || 'N/A',
-              phone: assistant.phone || 'N/A',
-              role: assistant.role,
-              assignedDoctors: [], // Will be populated from doctor assignments
-              initials: assistant.name ? assistant.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
-              isActive: assistant.isActive !== false,
-              status: assistant.isActive !== false ? 'Active' : 'Inactive',
-              statusColor: assistant.isActive !== false ? '#10B981' : '#DC2626'
-            }));
+            
+            // Transform the data and fetch assigned doctor names
+            const transformedAssistants = await Promise.all(
+              assistantUsers.map(async (assistantUser: any) => {
+                // Find the corresponding assistant document
+                const assistantDoc: any = assistantsResult.data.find((a: any) => a.userId === assistantUser.id);
+                const assignedDoctorIds = assistantDoc?.assignedDoctors || [];
+                
+                // Fetch doctor names for assigned doctors
+                const assignedDoctorNames: string[] = [];
+                if (assignedDoctorIds.length > 0) {
+                  for (const doctorId of assignedDoctorIds) {
+                    try {
+                      const doctorResult = await getDocument('doctors', doctorId);
+                      if (doctorResult.success && doctorResult.data) {
+                        const doctorData: any = doctorResult.data;
+                        // Get the user details for the doctor
+                        if (doctorData.userId) {
+                          const doctorUserResult = await getDocument('users', doctorData.userId);
+                          if (doctorUserResult.success && doctorUserResult.data) {
+                            const doctorUserData: any = doctorUserResult.data;
+                            assignedDoctorNames.push(doctorUserData.name || 'Dr. Unknown');
+                          }
+                        }
+                      }
+                    } catch (err) {
+                      console.error(`Failed to fetch doctor ${doctorId}:`, err);
+                    }
+                  }
+                }
+                
+                return {
+                  id: assistantUser.id,
+                  assistantId: assistantDoc?.id,
+                  name: assistantUser.name || 'Unknown Assistant',
+                  email: assistantUser.email || 'N/A',
+                  phone: assistantUser.phone || 'N/A',
+                  role: assistantUser.role,
+                  assignedDoctors: assignedDoctorIds,
+                  assignedDoctorNames: assignedDoctorNames,
+                  initials: assistantUser.name ? assistantUser.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
+                  isActive: assistantUser.isActive !== false,
+                  status: assistantUser.isActive !== false ? 'Active' : 'Inactive',
+                  statusColor: assistantUser.isActive !== false ? '#10B981' : '#DC2626'
+                };
+              })
+            );
+            
             setAssistants(transformedAssistants);
           } else {
             console.log('Admin Assistants - Failed to load assistants from database');
@@ -153,21 +193,54 @@ export default function AdminAssistants() {
         Alert.alert('Success', 'Assistant added successfully!');
         setIsAddDialogOpen(false);
         // Reload assistants
+        const assistantsResult = await getDocuments('assistants');
         const usersResult = await getDocuments('users');
-        if (usersResult.success && usersResult.data) {
+        if (assistantsResult.success && assistantsResult.data && usersResult.success && usersResult.data) {
           const assistantUsers = usersResult.data.filter((user: any) => user.role === 'assistant');
-          const transformedAssistants = assistantUsers.map((assistant: any) => ({
-            id: assistant.id,
-            name: assistant.name || 'Unknown Assistant',
-            email: assistant.email || 'N/A',
-            phone: assistant.phone || 'N/A',
-            role: assistant.role,
-            assignedDoctors: [],
-            initials: assistant.name ? assistant.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
-            isActive: assistant.isActive !== false,
-            status: assistant.isActive !== false ? 'Active' : 'Inactive',
-            statusColor: assistant.isActive !== false ? '#10B981' : '#DC2626'
-          }));
+          
+          const transformedAssistants = await Promise.all(
+            assistantUsers.map(async (assistantUser: any) => {
+              const assistantDoc: any = assistantsResult.data.find((a: any) => a.userId === assistantUser.id);
+              const assignedDoctorIds = assistantDoc?.assignedDoctors || [];
+              
+              const assignedDoctorNames: string[] = [];
+              if (assignedDoctorIds.length > 0) {
+                for (const doctorId of assignedDoctorIds) {
+                  try {
+                    const doctorResult = await getDocument('doctors', doctorId);
+                    if (doctorResult.success && doctorResult.data) {
+                      const doctorData: any = doctorResult.data;
+                      if (doctorData.userId) {
+                        const doctorUserResult = await getDocument('users', doctorData.userId);
+                        if (doctorUserResult.success && doctorUserResult.data) {
+                          const doctorUserData: any = doctorUserResult.data;
+                          assignedDoctorNames.push(doctorUserData.name || 'Dr. Unknown');
+                        }
+                      }
+                    }
+                  } catch (err) {
+                    console.error(`Failed to fetch doctor ${doctorId}:`, err);
+                  }
+                }
+              }
+              
+              return {
+                id: assistantUser.id,
+                assistantId: assistantDoc?.id,
+                name: assistantUser.name || 'Unknown Assistant',
+                email: assistantUser.email || 'N/A',
+                phone: assistantUser.phone || 'N/A',
+                role: assistantUser.role,
+                assignedDoctors: assignedDoctorIds,
+                assignedDoctorNames: assignedDoctorNames,
+                initials: assistantUser.name ? assistantUser.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
+                isActive: assistantUser.isActive !== false,
+                status: assistantUser.isActive !== false ? 'Active' : 'Inactive',
+                statusColor: assistantUser.isActive !== false ? '#10B981' : '#DC2626'
+              };
+            })
+          );
+          
           setAssistants(transformedAssistants);
         }
       } else {
@@ -241,21 +314,54 @@ export default function AdminAssistants() {
         setIsEditDialogOpen(false);
         setSelectedAssistant(null);
         // Reload assistants
+        const assistantsResult = await getDocuments('assistants');
         const usersResult = await getDocuments('users');
-        if (usersResult.success && usersResult.data) {
+        if (assistantsResult.success && assistantsResult.data && usersResult.success && usersResult.data) {
           const assistantUsers = usersResult.data.filter((user: any) => user.role === 'assistant');
-          const transformedAssistants = assistantUsers.map((assistant: any) => ({
-            id: assistant.id,
-            name: assistant.name || 'Unknown Assistant',
-            email: assistant.email || 'N/A',
-            phone: assistant.phone || 'N/A',
-            role: assistant.role,
-            assignedDoctors: [],
-            initials: assistant.name ? assistant.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
-            isActive: assistant.isActive !== false,
-            status: assistant.isActive !== false ? 'Active' : 'Inactive',
-            statusColor: assistant.isActive !== false ? '#10B981' : '#DC2626'
-          }));
+          
+          const transformedAssistants = await Promise.all(
+            assistantUsers.map(async (assistantUser: any) => {
+              const assistantDoc: any = assistantsResult.data.find((a: any) => a.userId === assistantUser.id);
+              const assignedDoctorIds = assistantDoc?.assignedDoctors || [];
+              
+              const assignedDoctorNames: string[] = [];
+              if (assignedDoctorIds.length > 0) {
+                for (const doctorId of assignedDoctorIds) {
+                  try {
+                    const doctorResult = await getDocument('doctors', doctorId);
+                    if (doctorResult.success && doctorResult.data) {
+                      const doctorData: any = doctorResult.data;
+                      if (doctorData.userId) {
+                        const doctorUserResult = await getDocument('users', doctorData.userId);
+                        if (doctorUserResult.success && doctorUserResult.data) {
+                          const doctorUserData: any = doctorUserResult.data;
+                          assignedDoctorNames.push(doctorUserData.name || 'Dr. Unknown');
+                        }
+                      }
+                    }
+                  } catch (err) {
+                    console.error(`Failed to fetch doctor ${doctorId}:`, err);
+                  }
+                }
+              }
+              
+              return {
+                id: assistantUser.id,
+                assistantId: assistantDoc?.id,
+                name: assistantUser.name || 'Unknown Assistant',
+                email: assistantUser.email || 'N/A',
+                phone: assistantUser.phone || 'N/A',
+                role: assistantUser.role,
+                assignedDoctors: assignedDoctorIds,
+                assignedDoctorNames: assignedDoctorNames,
+                initials: assistantUser.name ? assistantUser.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
+                isActive: assistantUser.isActive !== false,
+                status: assistantUser.isActive !== false ? 'Active' : 'Inactive',
+                statusColor: assistantUser.isActive !== false ? '#10B981' : '#DC2626'
+              };
+            })
+          );
+          
           setAssistants(transformedAssistants);
         }
       } else {
@@ -281,21 +387,54 @@ export default function AdminAssistants() {
         setIsDeleteDialogOpen(false);
         setSelectedAssistant(null);
         // Reload assistants
+        const assistantsResult = await getDocuments('assistants');
         const usersResult = await getDocuments('users');
-        if (usersResult.success && usersResult.data) {
+        if (assistantsResult.success && assistantsResult.data && usersResult.success && usersResult.data) {
           const assistantUsers = usersResult.data.filter((user: any) => user.role === 'assistant');
-          const transformedAssistants = assistantUsers.map((assistant: any) => ({
-            id: assistant.id,
-            name: assistant.name || 'Unknown Assistant',
-            email: assistant.email || 'N/A',
-            phone: assistant.phone || 'N/A',
-            role: assistant.role,
-            assignedDoctors: [],
-            initials: assistant.name ? assistant.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
-            isActive: assistant.isActive !== false,
-            status: assistant.isActive !== false ? 'Active' : 'Inactive',
-            statusColor: assistant.isActive !== false ? '#10B981' : '#DC2626'
-          }));
+          
+          const transformedAssistants = await Promise.all(
+            assistantUsers.map(async (assistantUser: any) => {
+              const assistantDoc: any = assistantsResult.data.find((a: any) => a.userId === assistantUser.id);
+              const assignedDoctorIds = assistantDoc?.assignedDoctors || [];
+              
+              const assignedDoctorNames: string[] = [];
+              if (assignedDoctorIds.length > 0) {
+                for (const doctorId of assignedDoctorIds) {
+                  try {
+                    const doctorResult = await getDocument('doctors', doctorId);
+                    if (doctorResult.success && doctorResult.data) {
+                      const doctorData: any = doctorResult.data;
+                      if (doctorData.userId) {
+                        const doctorUserResult = await getDocument('users', doctorData.userId);
+                        if (doctorUserResult.success && doctorUserResult.data) {
+                          const doctorUserData: any = doctorUserResult.data;
+                          assignedDoctorNames.push(doctorUserData.name || 'Dr. Unknown');
+                        }
+                      }
+                    }
+                  } catch (err) {
+                    console.error(`Failed to fetch doctor ${doctorId}:`, err);
+                  }
+                }
+              }
+              
+              return {
+                id: assistantUser.id,
+                assistantId: assistantDoc?.id,
+                name: assistantUser.name || 'Unknown Assistant',
+                email: assistantUser.email || 'N/A',
+                phone: assistantUser.phone || 'N/A',
+                role: assistantUser.role,
+                assignedDoctors: assignedDoctorIds,
+                assignedDoctorNames: assignedDoctorNames,
+                initials: assistantUser.name ? assistantUser.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
+                isActive: assistantUser.isActive !== false,
+                status: assistantUser.isActive !== false ? 'Active' : 'Inactive',
+                statusColor: assistantUser.isActive !== false ? '#10B981' : '#DC2626'
+              };
+            })
+          );
+          
           setAssistants(transformedAssistants);
         }
       } else {
@@ -376,12 +515,21 @@ export default function AdminAssistants() {
                 </View>
                 
                 <View style={styles.assistantDetails}>
-                  <View style={styles.detailRow}>
+                  <View style={styles.assignedDoctorsContainer}>
                     <Users size={16} color="#6B7280" />
-                    <ThemedText style={styles.detailText}>
-                      Assigned Doctors: {assistant.assignedDoctors.length > 0 ? assistant.assignedDoctors.join(', ') : 'None'}
-                    </ThemedText>
+                    <ThemedText style={styles.assignedDoctorsLabel}>Assigned Doctors:</ThemedText>
                   </View>
+                  {assistant.assignedDoctorNames && assistant.assignedDoctorNames.length > 0 ? (
+                    <View style={styles.doctorsTagContainer}>
+                      {assistant.assignedDoctorNames.map((doctorName: string, index: number) => (
+                        <View key={index} style={styles.doctorTag}>
+                          <ThemedText style={styles.doctorTagText}>{doctorName}</ThemedText>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <ThemedText style={styles.noDoctorsText}>None</ThemedText>
+                  )}
                 </View>
                 
                 <View style={styles.assistantActions}>
@@ -589,14 +737,39 @@ const styles = StyleSheet.create({
   assistantDetails: {
     marginBottom: 16,
   },
-  detailRow: {
+  assignedDoctorsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 8,
   },
-  detailText: {
+  assignedDoctorsLabel: {
     fontSize: 14,
     color: '#6B7280',
     marginLeft: 8,
+  },
+  doctorsTagContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 4,
+    gap: 6,
+  },
+  doctorTag: {
+    backgroundColor: '#E5F7F5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#14B8A6',
+  },
+  doctorTagText: {
+    fontSize: 12,
+    color: '#0D9488',
+    fontWeight: '500',
+  },
+  noDoctorsText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
   },
   assistantActions: {
     flexDirection: 'row',

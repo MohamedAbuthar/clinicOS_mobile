@@ -117,8 +117,8 @@ const transformDoctorData = async (doctors: any[]) => {
         online: doctor.isActive,
         phone: doctor.user?.phone || 'N/A',
         email: doctor.user?.email || 'N/A',
-        schedule: 'Mon-Fri, 9:00 AM - 5:00 PM',
-        room: 'Room 101'
+        schedule: doctor.schedule || 'Mon-Fri, 9:00 AM - 5:00 PM',
+        room: doctor.room || 'Room 101'
       };
     })
   );
