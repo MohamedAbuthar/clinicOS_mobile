@@ -6,7 +6,7 @@ import { PaginationComponent } from '@/components/PaginationComponent';
 import { ThemedText } from '@/components/themed-text';
 import { ViewDoctorDialog } from '@/components/ViewDoctorDialog';
 import { getCurrentUser } from '@/lib/firebase/auth';
-import { createDocument, deleteDoctor, getAllDoctors, getAppointmentsByDoctorAndDate, updateDoctor } from '@/lib/firebase/firestore';
+import { createDocument, deleteDoctor, getAllDoctors, getAppointmentsByDoctorAndDate, getDocuments, updateDoctor } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import { Clock, Edit, Eye, Trash2, Users } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
@@ -97,9 +97,37 @@ const calculateDoctorStats = async (doctorId: string) => {
 
 // Helper function to transform doctor data
 const transformDoctorData = async (doctors: any[]) => {
+  // Fetch all assistants to get their names
+  const assistantsResult = await getDocuments('assistants');
+  const usersResult = await getDocuments('users');
+  
+  let assistantsMap = new Map();
+  if (assistantsResult.success && assistantsResult.data && usersResult.success && usersResult.data) {
+    // Create a map of assistant document IDs to their user names
+    assistantsResult.data.forEach((assistant: any) => {
+      const user: any = usersResult.data.find((u: any) => u.id === assistant.userId);
+      if (user) {
+        assistantsMap.set(assistant.id, user.name || 'Unknown Assistant');
+      }
+    });
+  }
+  
   const transformedDoctors = await Promise.all(
     doctors.map(async (doctor: any, index: number) => {
       const stats = await calculateDoctorStats(doctor.id);
+      
+      // Get assigned assistant names
+      const assignedAssistantIds = doctor.assignedAssistants || [];
+      const assignedAssistantNames: string[] = [];
+      
+      if (assignedAssistantIds.length > 0) {
+        for (const assistantId of assignedAssistantIds) {
+          const assistantName = assistantsMap.get(assistantId);
+          if (assistantName) {
+            assignedAssistantNames.push(assistantName);
+          }
+        }
+      }
       
       return {
         id: doctor.id,
@@ -108,12 +136,13 @@ const transformDoctorData = async (doctors: any[]) => {
         status: doctor.status === 'In' ? 'In' : 'Out',
         consultationDuration: doctor.consultationDuration || 20,
         assignedAssistants: doctor.assignedAssistants || [],
+        assignedAssistantNames: assignedAssistantNames,
         initials: doctor.user?.name ? doctor.user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase() : '...',
         bgColor: index % 2 === 0 ? 'bg-teal-600' : 'bg-teal-700',
         statusColor: doctor.status === 'In' ? 'bg-emerald-500' : 'bg-gray-400',
         stats: stats,
         slotDuration: `${doctor.consultationDuration || 20} min slots`,
-        assistants: 'No assistants assigned',
+        assistants: assignedAssistantNames.length > 0 ? assignedAssistantNames.join(', ') : 'No assistants assigned',
         online: doctor.isActive,
         phone: doctor.user?.phone || 'N/A',
         email: doctor.user?.email || 'N/A',
@@ -138,7 +167,7 @@ export default function AdminDoctors() {
   const [doctors, setDoctors] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [itemsPerPage] = useState<number>(6);
+  const [itemsPerPage] = useState<number>(10);
 
   // Load doctors data
   useEffect(() => {
@@ -495,12 +524,21 @@ export default function AdminDoctors() {
                       {doctor.slotDuration}
                     </ThemedText>
                   </View>
-                  <View style={styles.detailRow}>
+                  <View style={styles.assistantsContainer}>
                     <Users size={16} color="#6B7280" />
-                    <ThemedText style={styles.detailText}>
-                      {doctor.assistants}
-                    </ThemedText>
+                    <ThemedText style={styles.assistantsLabel}>Assigned Assistants:</ThemedText>
                   </View>
+                  {doctor.assignedAssistantNames && doctor.assignedAssistantNames.length > 0 ? (
+                    <View style={styles.assistantsTagContainer}>
+                      {doctor.assignedAssistantNames.map((assistantName: string, index: number) => (
+                        <View key={index} style={styles.assistantTag}>
+                          <ThemedText style={styles.assistantTagText}>{assistantName}</ThemedText>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <ThemedText style={styles.noAssistantsText}>No assistants assigned</ThemedText>
+                  )}
                 </View>
                 
                 <View style={styles.doctorActions}>
@@ -768,6 +806,41 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     marginLeft: 8,
+  },
+  assistantsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  assistantsLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginLeft: 8,
+  },
+  assistantsTagContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 4,
+    gap: 6,
+  },
+  assistantTag: {
+    backgroundColor: '#E5F7F5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#14B8A6',
+  },
+  assistantTagText: {
+    fontSize: 12,
+    color: '#0D9488',
+    fontWeight: '500',
+  },
+  noAssistantsText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    marginTop: 4,
   },
   doctorActions: {
     flexDirection: 'row',
