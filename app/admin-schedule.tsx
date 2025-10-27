@@ -1,8 +1,9 @@
+import { AddOverrideDialog } from '@/components/AddOverrideDialog';
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { EditScheduleDialog } from '@/components/EditScheduleDialog';
 import { ThemedText } from '@/components/themed-text';
 import { getCurrentUser } from '@/lib/firebase/auth';
-import { createDoctorSchedule, getAllDoctors, getDoctorSchedule, updateDoctorSchedule } from '@/lib/firebase/firestore';
+import { createDoctorSchedule, createScheduleOverride, getAllDoctors, getDoctorSchedule, getScheduleOverrides, updateDoctorSchedule } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -140,6 +141,16 @@ interface ScheduleData {
   isActive: boolean;
 }
 
+interface HolidayData {
+  id: string;
+  title: string;
+  date: string;
+  startTime?: string;
+  endTime?: string;
+  type: string;
+  description?: string;
+}
+
 interface ScheduleRowProps {
   day: string;
   dayOfWeek: number;
@@ -218,6 +229,7 @@ export default function AdminSchedule() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isAddHolidayDialogOpen, setIsAddHolidayDialogOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<{
     day: string;
     dayOfWeek: number;
@@ -227,6 +239,7 @@ export default function AdminSchedule() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [selectedDoctor, setSelectedDoctor] = useState<string>('');
   const [schedules, setSchedules] = useState<ScheduleData[]>([]);
+  const [holidays, setHolidays] = useState<HolidayData[]>([]);
   const [user, setUser] = useState<any>(null);
   const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
 
@@ -269,6 +282,7 @@ export default function AdminSchedule() {
   useEffect(() => {
     if (selectedDoctor) {
       loadSchedules();
+      loadHolidays();
     }
   }, [selectedDoctor]);
 
@@ -290,6 +304,44 @@ export default function AdminSchedule() {
       setSchedules([]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadHolidays = async () => {
+    try {
+      console.log('Loading holidays for doctor:', selectedDoctor);
+      const result = await getScheduleOverrides(selectedDoctor);
+      console.log('Holidays result:', result);
+      if (result.success && result.data) {
+        console.log('Setting holidays:', result.data);
+        // Transform the data to match HolidayData interface
+        const transformedHolidays = result.data.map((holiday: any) => {
+          // Format the date to YYYY-MM-DD for display
+          let formattedDate = holiday.date;
+          if (holiday.date instanceof Date || typeof holiday.date === 'object') {
+            formattedDate = new Date(holiday.date).toISOString().split('T')[0];
+          } else if (typeof holiday.date === 'string' && holiday.date.includes('T')) {
+            formattedDate = holiday.date.split('T')[0];
+          }
+          
+          return {
+            id: holiday.id,
+            title: holiday.reason || holiday.title,
+            date: formattedDate,
+            startTime: holiday.startTime,
+            endTime: holiday.endTime,
+            type: holiday.type,
+            description: holiday.description || ''
+          };
+        });
+        setHolidays(transformedHolidays);
+      } else {
+        console.log('No holiday data, setting empty array');
+        setHolidays([]);
+      }
+    } catch (error) {
+      console.error('Error loading holidays:', error);
+      setHolidays([]);
     }
   };
 
@@ -369,6 +421,55 @@ export default function AdminSchedule() {
     setShowDoctorDropdown(!showDoctorDropdown);
   };
 
+  const handleOpenAddHolidayDialog = () => {
+    setIsAddHolidayDialogOpen(true);
+  };
+
+  const handleCloseAddHolidayDialog = () => {
+    setIsAddHolidayDialogOpen(false);
+  };
+
+  const handleSaveHoliday = async (data: any) => {
+    if (!selectedDoctor) {
+      Alert.alert('Error', 'Please select a doctor first');
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      console.log('Saving holiday:', data);
+      
+      // Parse time range into start and end times
+      const [startTime = '', endTime = ''] = data.timeRange ? data.timeRange.split(' - ') : ['', ''];
+      
+      const holidayData = {
+        doctorId: selectedDoctor,
+        reason: data.title,
+        date: data.date,
+        startTime: startTime.trim() || undefined,
+        endTime: endTime.trim() || undefined,
+        type: data.type === 'special-event' ? 'extended_hours' : data.type,
+        description: data.description || '',
+      };
+      
+      const result = await createScheduleOverride(holidayData);
+      
+      if (result.success) {
+        Alert.alert('Success', 'Holiday added successfully!');
+        setIsAddHolidayDialogOpen(false);
+        // Reload holidays to show the new one
+        await loadHolidays();
+      } else {
+        Alert.alert('Error', result.error || 'Failed to add holiday. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error saving holiday:', error);
+      Alert.alert('Error', 'Failed to add holiday. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Get weekly schedule data
   const getWeeklySchedule = (): ScheduleRowProps[] => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -419,10 +520,11 @@ export default function AdminSchedule() {
         </View>
         <TouchableOpacity 
           style={styles.addButton}
+          onPress={handleOpenAddHolidayDialog}
           disabled={isLoading}
         >
           <Plus />
-          <ThemedText style={styles.addButtonText}>Add Override</ThemedText>
+          <ThemedText style={styles.addButtonText}>Add Holiday</ThemedText>
         </TouchableOpacity>
       </View>
 
@@ -486,16 +588,47 @@ export default function AdminSchedule() {
           {/* Schedule Overrides */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <ThemedText style={styles.sectionTitle}>Schedule Overrides</ThemedText>
+              <ThemedText style={styles.sectionTitle}>Schedule Holidays</ThemedText>
               <ThemedText style={styles.sectionSubtitle}>
                 Holidays, extended hours, and special schedules
               </ThemedText>
             </View>
             
-            <View style={styles.emptyState}>
-              <Calendar />
-              <ThemedText style={styles.emptyStateText}>No schedule overrides found</ThemedText>
-            </View>
+            {holidays.length > 0 ? (
+              <View style={styles.holidayList}>
+                {holidays.map((holiday) => (
+                  <View key={holiday.id} style={styles.holidayCard}>
+                    <View style={styles.holidayCardContent}>
+                      <View style={styles.holidayCardLeft}>
+                        <ThemedText style={styles.holidayTitle}>{holiday.title}</ThemedText>
+                        <View style={styles.holidayMeta}>
+                          <View style={styles.holidayMetaItem}>
+                            <Calendar />
+                            <ThemedText style={styles.holidayMetaText}>{holiday.date}</ThemedText>
+                          </View>
+                          {holiday.startTime && holiday.endTime && (
+                            <View style={styles.holidayMetaItem}>
+                              <Clock />
+                              <ThemedText style={styles.holidayMetaText}>
+                                {holiday.startTime} - {holiday.endTime}
+                              </ThemedText>
+                            </View>
+                          )}
+                        </View>
+                        <View style={styles.holidayBadge}>
+                          <ThemedText style={styles.holidayBadgeText}>{holiday.type}</ThemedText>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.emptyState}>
+                <Calendar />
+                <ThemedText style={styles.emptyStateText}>No schedule overrides found</ThemedText>
+              </View>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -554,6 +687,14 @@ export default function AdminSchedule() {
         onClose={closeEditDialog}
         onSave={handleSaveSchedule}
         initialData={editingSchedule}
+        isLoading={isLoading}
+      />
+
+      {/* Add Holiday Dialog */}
+      <AddOverrideDialog
+        isOpen={isAddHolidayDialogOpen}
+        onClose={handleCloseAddHolidayDialog}
+        onSave={handleSaveHoliday}
         isLoading={isLoading}
       />
     </SafeAreaView>
@@ -811,5 +952,52 @@ const styles = StyleSheet.create({
   modalDoctorSpecialty: {
     fontSize: 13,
     color: '#6B7280',
+  },
+  holidayList: {
+    gap: 12,
+  },
+  holidayCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 16,
+  },
+  holidayCardContent: {
+    gap: 12,
+  },
+  holidayCardLeft: {
+    gap: 8,
+  },
+  holidayTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  holidayMeta: {
+    flexDirection: 'column',
+    gap: 8,
+  },
+  holidayMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  holidayMetaText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  holidayBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  holidayBadgeText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#92400E',
+    textTransform: 'capitalize',
   },
 });

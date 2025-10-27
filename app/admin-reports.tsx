@@ -1,11 +1,14 @@
 import { AdminSidebar } from '@/components/AdminSidebar';
+import AppointmentTrendsChart, { AppointmentData } from '@/components/charts/AppointmentTrendsChart';
+import DoctorPerformanceCard, { DoctorPerformanceCardProps } from '@/components/charts/DoctorPerformanceCard';
+import WaitTimeChart, { WaitTimeData } from '@/components/charts/WaitTimeChart';
 import { ThemedText } from '@/components/themed-text';
 import { getCurrentUser } from '@/lib/firebase/auth';
-import { getDocuments } from '@/lib/firebase/firestore';
+import { getAllDoctors, getDocuments } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
-import { BarChart3, Calendar, Clock, Download, PieChart, TrendingUp, Users } from 'lucide-react-native';
+import { BarChart3, Calendar, Clock, TrendingUp, Users } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 
@@ -26,6 +29,7 @@ export default function AdminReports() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'appointments' | 'queue' | 'doctor'>('appointments');
   const [timeRange, setTimeRange] = useState<'today' | 'thisWeek' | 'thisMonth'>('thisWeek');
+  const [showTimeRangeDropdown, setShowTimeRangeDropdown] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
@@ -45,8 +49,8 @@ export default function AdminReports() {
             setAppointments(appointmentsResult.data);
           }
           
-          // Load doctors
-          const doctorsResult = await getDocuments('doctors');
+          // Load doctors with user data
+          const doctorsResult = await getAllDoctors();
           if (doctorsResult.success && doctorsResult.data) {
             setDoctors(doctorsResult.data);
           }
@@ -71,22 +75,177 @@ export default function AdminReports() {
     Alert.alert('Download Report', 'This feature will be implemented soon');
   };
 
-  // Calculate statistics
+  // Get date range based on time range selection
+  const getDateRange = (range: 'today' | 'thisWeek' | 'thisMonth') => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (range) {
+      case 'today':
+        return {
+          start: today,
+          end: new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1)
+        };
+      case 'thisWeek':
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        return { start: startOfWeek, end: endOfWeek };
+      case 'thisMonth':
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        endOfMonth.setHours(23, 59, 59, 999);
+        return { start: startOfMonth, end: endOfMonth };
+      default:
+        return { start: today, end: today };
+    }
+  };
+
+  // Filter appointments based on selected time range
+  const filterAppointmentsByDateRange = (appointments: any[], range: 'today' | 'thisWeek' | 'thisMonth') => {
+    const { start, end } = getDateRange(range);
+    return appointments.filter(appointment => {
+      const appointmentDate = new Date(appointment.appointmentDate);
+      return appointmentDate >= start && appointmentDate <= end;
+    });
+  };
+
+  // Get filtered appointments
+  const filteredAppointments = filterAppointmentsByDateRange(appointments, timeRange);
+
+  // Calculate statistics based on filtered data
   const getStats = () => {
-    const today = new Date().toISOString().split('T')[0];
-    const todayAppointments = appointments.filter(apt => apt.appointmentDate === today);
+    const totalAppointments = filteredAppointments.length;
+    const completedAppointments = filteredAppointments.filter(apt => apt.status === 'completed').length;
+    const pendingAppointments = filteredAppointments.filter(apt => apt.status === 'scheduled' || apt.status === 'confirmed').length;
     
     return {
-      totalAppointments: appointments.length,
-      todayAppointments: todayAppointments.length,
-      completedAppointments: appointments.filter(apt => apt.status === 'completed').length,
-      pendingAppointments: appointments.filter(apt => apt.status === 'scheduled' || apt.status === 'confirmed').length,
+      totalAppointments,
+      todayAppointments: timeRange === 'today' ? totalAppointments : 0,
+      completedAppointments,
+      pendingAppointments,
       totalDoctors: doctors.length,
       activeDoctors: doctors.filter(doc => doc.status === 'In').length,
     };
   };
 
   const stats = getStats();
+
+  const timeRangeOptions = [
+    { value: 'today', label: 'Today' },
+    { value: 'thisWeek', label: 'This Week' },
+    { value: 'thisMonth', label: 'This Month' },
+  ];
+
+  const handleTimeRangeSelect = (range: 'today' | 'thisWeek' | 'thisMonth') => {
+    setTimeRange(range);
+    setShowTimeRangeDropdown(false);
+  };
+
+  // Generate appointment trends data based on time range
+  const generateAppointmentData = (): AppointmentData[] => {
+    const { start, end } = getDateRange(timeRange);
+    const data: AppointmentData[] = [];
+    
+    if (timeRange === 'today') {
+      // For today, show hourly data
+      for (let hour = 9; hour <= 17; hour++) {
+        const hourStart = new Date(start);
+        hourStart.setHours(hour, 0, 0, 0);
+        const hourEnd = new Date(start);
+        hourEnd.setHours(hour + 1, 0, 0, 0);
+        
+        const hourAppointments = filteredAppointments.filter(apt => {
+          const aptTime = new Date(`${apt.appointmentDate} ${apt.appointmentTime}`);
+          return aptTime >= hourStart && aptTime < hourEnd;
+        });
+        
+        data.push({
+          day: `${hour}:00`,
+          total: hourAppointments.length,
+          completed: hourAppointments.filter(apt => apt.status === 'completed').length,
+          cancelled: hourAppointments.filter(apt => apt.status === 'cancelled').length,
+        });
+      }
+    } else {
+      // For week/month, show daily data
+      const current = new Date(start);
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      
+      while (current <= end) {
+        const dayAppointments = filteredAppointments.filter(apt => {
+          const aptDate = new Date(apt.appointmentDate);
+          return aptDate.toDateString() === current.toDateString();
+        });
+        
+        data.push({
+          day: days[current.getDay()],
+          total: dayAppointments.length,
+          completed: dayAppointments.filter(apt => apt.status === 'completed').length,
+          cancelled: dayAppointments.filter(apt => apt.status === 'cancelled').length,
+        });
+        
+        current.setDate(current.getDate() + 1);
+      }
+    }
+    
+    return data;
+  };
+
+  const appointmentData = generateAppointmentData();
+
+  // Wait time data (mock data for now)
+  const waitTimeData: WaitTimeData[] = [
+    { hour: '9AM', avgWait: 5 },
+    { hour: '10AM', avgWait: 12 },
+    { hour: '11AM', avgWait: 18 },
+    { hour: '12PM', avgWait: 25 },
+    { hour: '2PM', avgWait: 14 },
+    { hour: '3PM', avgWait: 20 },
+    { hour: '4PM', avgWait: 22 },
+    { hour: '5PM', avgWait: 8 },
+  ];
+
+  // Doctor performance data - match web version logic
+  const doctorPerformance: DoctorPerformanceCardProps[] = React.useMemo(() => {
+    console.log('Generating doctor performance, doctors:', doctors.length, 'appointments:', filteredAppointments.length);
+    
+    return doctors
+      .map(doctor => {
+        // Try to get doctor name from multiple possible fields
+        let doctorName = 'Unknown Doctor';
+        if (doctor.user?.name) {
+          doctorName = doctor.user.name;
+        } else if (doctor.name) {
+          doctorName = doctor.name;
+        } else if (doctor.fullName) {
+          doctorName = doctor.fullName;
+        } else if (doctor.firstName && doctor.lastName) {
+          doctorName = `${doctor.firstName} ${doctor.lastName}`;
+        } else if (doctor.id) {
+          doctorName = `Doctor ${doctor.id}`;
+        }
+        
+        const doctorAppointments = filteredAppointments.filter(apt => apt.doctorId === doctor.id || apt.doctorId === doctor.userId);
+        const completedAppointments = doctorAppointments.filter(apt => apt.status === 'completed');
+        
+        // Calculate completion rate for on-time rate
+        const totalAppointments = doctorAppointments.length;
+        const completionRate = totalAppointments > 0 
+          ? Math.round((completedAppointments.length / totalAppointments) * 100) 
+          : 94; // Default to 94% like web version
+        
+        return {
+          doctorName,
+          patientsServed: completedAppointments.length,
+          avgConsultTime: `${doctor.consultationDuration || 30} min`,
+          onTimeRate: `${completionRate}%`,
+        };
+      })
+      .filter(doctor => doctor.doctorName && doctor.doctorName !== 'Unknown Doctor');
+  }, [doctors, filteredAppointments]);
 
   const StatCard = ({ title, value, icon: Icon, color }: any) => (
     <View style={styles.statCard}>
@@ -125,14 +284,14 @@ export default function AdminReports() {
             <ThemedText style={styles.subtitle}>View clinic analytics and reports</ThemedText>
           </View>
         </View>
-        <TouchableOpacity 
+        {/* <TouchableOpacity 
           style={styles.downloadButton}
           onPress={handleDownload}
           disabled={loading}
         >
           <Download size={16} color="#FFFFFF" />
           <ThemedText style={styles.downloadButtonText}>Download</ThemedText>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       {/* Sidebar */}
@@ -156,20 +315,15 @@ export default function AdminReports() {
             </View>
             <TouchableOpacity 
               style={styles.pickerContainer}
-              onPress={() => {
-                const options = ['today', 'thisWeek', 'thisMonth'];
-                const labels = ['Today', 'This Week', 'This Month'];
-                const currentIndex = options.indexOf(timeRange);
-                const nextIndex = (currentIndex + 1) % options.length;
-                setTimeRange(options[nextIndex] as any);
-              }}
+              onPress={() => setShowTimeRangeDropdown(true)}
             >
               <ThemedText style={styles.pickerText}>
-                {timeRange === 'today' ? 'Today' : timeRange === 'thisWeek' ? 'This Week' : 'This Month'}
+                {timeRangeOptions.find(opt => opt.value === timeRange)?.label}
               </ThemedText>
               <ThemedText style={styles.pickerArrow}>▼</ThemedText>
             </TouchableOpacity>
           </View>
+
 
           {/* Statistics Cards */}
           <View style={styles.section}>
@@ -229,55 +383,85 @@ export default function AdminReports() {
           {/* Tab Content */}
           <View style={styles.section}>
             {activeTab === 'appointments' && (
-              <View>
-                <View style={styles.sectionHeader}>
-                  <Calendar size={20} color="#059669" />
-                  <ThemedText style={styles.sectionTitle}>Appointment Trends</ThemedText>
-                </View>
-                <View style={styles.chartPlaceholder}>
-                  <BarChart3 size={48} color="#6B7280" />
-                  <ThemedText style={styles.chartTitle}>Appointment Trends Chart</ThemedText>
-                  <ThemedText style={styles.chartSubtitle}>
-                    Visual representation of appointment patterns over time
-                  </ThemedText>
-                </View>
-              </View>
+              <AppointmentTrendsChart data={appointmentData} />
             )}
 
             {activeTab === 'queue' && (
-              <View>
-                <View style={styles.sectionHeader}>
-                  <Users size={20} color="#059669" />
-                  <ThemedText style={styles.sectionTitle}>Queue Analytics</ThemedText>
-                </View>
-                <View style={styles.chartPlaceholder}>
-                  <PieChart size={48} color="#6B7280" />
-                  <ThemedText style={styles.chartTitle}>Queue Distribution</ThemedText>
-                  <ThemedText style={styles.chartSubtitle}>
-                    Current queue status and wait times
-                  </ThemedText>
-                </View>
-              </View>
+              <WaitTimeChart data={waitTimeData} />
             )}
 
             {activeTab === 'doctor' && (
               <View>
-                <View style={styles.sectionHeader}>
-                  <TrendingUp size={20} color="#059669" />
-                  <ThemedText style={styles.sectionTitle}>Doctor Performance</ThemedText>
-                </View>
-                <View style={styles.chartPlaceholder}>
-                  <BarChart3 size={48} color="#6B7280" />
-                  <ThemedText style={styles.chartTitle}>Doctor Performance Metrics</ThemedText>
-                  <ThemedText style={styles.chartSubtitle}>
-                    Individual doctor statistics and performance
-                  </ThemedText>
-                </View>
+                {doctorPerformance.length > 0 ? (
+                  <>
+                    <View style={styles.sectionHeader}>
+                      <TrendingUp size={20} color="#059669" />
+                      <ThemedText style={styles.sectionTitle}>Doctor Performance</ThemedText>
+                    </View>
+                    <View style={styles.doctorCardsContainer}>
+                      {doctorPerformance.map((doctor, index) => (
+                        <DoctorPerformanceCard key={`doctor-${index}`} {...doctor} />
+                      ))}
+                    </View>
+                  </>
+                ) : (
+                  <View style={styles.emptyState}>
+                    <Users size={48} color="#6B7280" />
+                    <ThemedText style={styles.emptyStateText}>
+                      No doctor performance data available for this period
+                    </ThemedText>
+                    {doctors.length > 0 && (
+                      <ThemedText style={[styles.emptyStateText, { fontSize: 12, marginTop: 8 }]}>
+                        Total doctors in system: {doctors.length}
+                      </ThemedText>
+                    )}
+                  </View>
+                )}
               </View>
             )}
           </View>
         </View>
       </ScrollView>
+
+      {/* Time Range Modal */}
+      <Modal
+        visible={showTimeRangeDropdown}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowTimeRangeDropdown(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowTimeRangeDropdown(false)}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <ThemedText style={styles.modalTitle}>Select Time Range</ThemedText>
+            </View>
+            {timeRangeOptions.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.modalOption,
+                  timeRange === option.value && styles.modalOptionSelected
+                ]}
+                onPress={() => handleTimeRangeSelect(option.value as any)}
+              >
+                <ThemedText style={[
+                  styles.modalOptionText,
+                  timeRange === option.value && styles.modalOptionTextSelected
+                ]}>
+                  {option.label}
+                </ThemedText>
+                {timeRange === option.value && (
+                  <ThemedText style={styles.modalCheck}>✓</ThemedText>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -465,6 +649,80 @@ const styles = StyleSheet.create({
   chartSubtitle: {
     fontSize: 14,
     color: '#6B7280',
+    textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
+    maxHeight: '50%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  modalHeader: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  modalOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  modalOptionSelected: {
+    backgroundColor: '#F0FDF4',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: '#111827',
+  },
+  modalOptionTextSelected: {
+    color: '#059669',
+    fontWeight: '600',
+  },
+  modalCheck: {
+    fontSize: 18,
+    color: '#059669',
+    fontWeight: '600',
+  },
+  doctorCardsContainer: {
+    gap: 12,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 16,
     textAlign: 'center',
   },
 });

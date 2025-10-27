@@ -385,9 +385,9 @@ export default function AdminAssistants() {
                 </View>
                 
                 <View style={styles.assistantActions}>
-                  <TouchableOpacity style={[styles.actionButton, { backgroundColor: assistant.statusColor }]}>
+                  {/* <TouchableOpacity style={[styles.actionButton, { backgroundColor: assistant.statusColor }]}>
                     <ThemedText style={styles.actionText}>{assistant.status}</ThemedText>
-                  </TouchableOpacity>
+                  </TouchableOpacity> */}
                   <TouchableOpacity 
                     style={styles.actionButton}
                     onPress={() => handleEditAssistant(assistant)}

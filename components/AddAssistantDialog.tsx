@@ -145,6 +145,7 @@ export function AddAssistantDialog({ isOpen, onClose, onSubmit, doctors, isLoadi
     assignedDoctors: [] as string[],
     status: ''
   });
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [showDoctorPicker, setShowDoctorPicker] = useState(false);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
 
@@ -154,13 +155,16 @@ export function AddAssistantDialog({ isOpen, onClose, onSubmit, doctors, isLoadi
   const statusRef = useRef<View>(null);
 
   const handleInputChange = (field: string, value: string) => {
-    // Phone number validation - limit to 13 digits
+    // Phone number validation - limit to 10 digits (for numbers after +91)
     if (field === 'phone') {
-      // Remove all non-digit characters
-      const digitsOnly = value.replace(/\D/g, '');
-      // Limit to 13 digits
-      const limitedValue = digitsOnly.slice(0, 13);
-      setFormData(prev => ({ ...prev, [field]: limitedValue }));
+      // Remove all non-numeric characters
+      const numericValue = value.replace(/\D/g, '');
+      // Limit to 10 digits
+      if (numericValue.length <= 10) {
+        setPhoneNumber(numericValue);
+        // Store with country code in formData
+        setFormData(prev => ({ ...prev, [field]: `+91${numericValue}` }));
+      }
     } else {
       setFormData(prev => ({ ...prev, [field]: value }));
     }
@@ -214,6 +218,7 @@ export function AddAssistantDialog({ isOpen, onClose, onSubmit, doctors, isLoadi
       assignedDoctors: [],
       status: ''
     });
+    setPhoneNumber('');
     setShowDoctorPicker(false);
     setShowStatusPicker(false);
   };
@@ -278,38 +283,46 @@ export function AddAssistantDialog({ isOpen, onClose, onSubmit, doctors, isLoadi
                 />
               </View>
 
-              {/* Email and Phone */}
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, styles.halfWidth]}>
-                  <ThemedText style={styles.label}>
-                    <Mail /> Email <ThemedText style={styles.required}>*</ThemedText>
-                  </ThemedText>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.email}
-                    onChangeText={(value) => handleInputChange('email', value)}
-                    placeholder="email@example.com"
-                    placeholderTextColor="#9CA3AF"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    returnKeyType="next"
-                  />
+              {/* Phone Number */}
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.label}>
+                  <Phone /> Phone Number <ThemedText style={styles.required}>*</ThemedText>
+                </ThemedText>
+                <View style={styles.phoneInputContainer}>
+                  <View style={styles.countryCode}>
+                    <ThemedText style={styles.countryCodeText}>+91</ThemedText>
+                  </View>
+                  <View style={[styles.phoneInput]}>
+                  
+                    <TextInput
+                      style={styles.input}
+                      value={phoneNumber}
+                      onChangeText={(value) => handleInputChange('phone', value)}
+                      placeholder="1234567890"
+                      placeholderTextColor="#9CA3AF"
+                      keyboardType="phone-pad"
+                      returnKeyType="next"
+                      maxLength={10}
+                    />
+                  </View>
                 </View>
-                <View style={[styles.inputGroup, styles.halfWidth]}>
-                  <ThemedText style={styles.label}>
-                    <Phone /> Phone <ThemedText style={styles.required}>*</ThemedText>
-                  </ThemedText>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.phone}
-                    onChangeText={(value) => handleInputChange('phone', value)}
-                    placeholder="Enter 13-digit phone number"
-                    placeholderTextColor="#9CA3AF"
-                    keyboardType="phone-pad"
-                    returnKeyType="next"
-                    maxLength={13}
-                  />
-                </View>
+              </View>
+
+              {/* Email */}
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.label}>
+                  <Mail /> Email <ThemedText style={styles.required}>*</ThemedText>
+                </ThemedText>
+                <TextInput
+                  style={styles.input}
+                  value={formData.email}
+                  onChangeText={(value) => handleInputChange('email', value)}
+                  placeholder="email@example.com"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  returnKeyType="next"
+                />
               </View>
 
               {/* Password */}
@@ -568,6 +581,35 @@ const styles = StyleSheet.create({
   halfWidth: {
     flex: 1,
     minWidth: 150,
+  },
+  phoneInputContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  countryCode: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    minWidth: 50,
+  },
+  countryCodeText: {
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '500',
+  },
+  phoneInput: {
+    flex: 1,
+  },
+  inputWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
   },
   label: {
     fontSize: 12,
