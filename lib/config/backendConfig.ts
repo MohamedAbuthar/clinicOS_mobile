@@ -3,12 +3,13 @@
 
 export const BACKEND_CONFIG = {
   // Development backend URL (local backend server)
-  DEV_URL: 'http://localhost:3001',
+  DEV_URL: 'http://192.168.31.63:3005',
   
   // Production backend URL (when deployed)
-  PROD_URL: 'https://your-backend-url.com',
+  PROD_URL: 'https://your-production-backend-url.com',
   
-  // Current environment - change this to 'production' when deploying
+  // Current environment - change this to 'production' when deploying APK
+  // Set to 'production' to use the deployed backend for APK builds
   ENVIRONMENT: 'development' as 'development' | 'production',
   
   // Get the current backend URL based on environment
