@@ -1,6 +1,6 @@
-import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import express from 'express';
 import path from 'path';
 import otpRoutes from './routes/otpRoutes';
 import { EmailService } from './services/emailService';
@@ -53,6 +53,8 @@ app.use(cors({
     'exp://localhost:8081',
     /^exp:\/\/.*/, // Allow all Expo URLs
     /^http:\/\/192\.168\.\d+\.\d+:8081$/, // Allow local network
+    /^http:\/\/192\.168\.\d+\.\d+:3005$/, // Allow backend access from mobile
+    /^http:\/\/192\.168\.\d+\.\d+:\d+$/, // Allow any local network port
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

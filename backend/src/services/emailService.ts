@@ -1,5 +1,4 @@
 import nodemailer from 'nodemailer';
-import { EmailConfig } from '../types';
 
 // Email service using nodemailer for Gmail SMTP
 export class EmailService {

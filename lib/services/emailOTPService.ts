@@ -32,7 +32,7 @@ function generateOTP(): string {
 }
 
 // Send email using backend API
-async function sendEmailWithBackend(email: string, otp: string): Promise<{ success: boolean; message: string }> {
+async function sendEmailWithBackend(email: string): Promise<{ success: boolean; message: string }> {
   try {
     console.log('📧 Sending OTP via Backend API...');
     
@@ -90,25 +90,12 @@ export async function sendOTPEmail(email: string): Promise<{ success: boolean; m
       }
     }
 
-    // Generate OTP
-    const otp = generateOTP();
-    const expiresAt = new Date(Date.now() + 3 * 60 * 1000); // 3 minutes (matching web app)
-
-    // Store OTP in memory
-    records[email.toLowerCase()] = {
-      otp,
-      email: email.toLowerCase(),
-      expiresAt,
-      attempts: 0
-    };
-    saveOTPRecords(records);
-
-    // Try to send email via Backend API
+    // Try to send email via Backend API (let backend generate and store OTP)
     console.log('📧 Sending OTP via Backend API...');
     console.log('📧 Using backend SMTP service...');
     
     try {
-      const emailResult = await sendEmailWithBackend(email, otp);
+      const emailResult = await sendEmailWithBackend(email);
       
       if (emailResult.success) {
         console.log(`✅ OTP sent to ${email} via backend`);
@@ -122,6 +109,20 @@ export async function sendOTPEmail(email: string): Promise<{ success: boolean; m
       }
     } catch (emailError: any) {
       console.log('📧 Backend API failed - using fallback mode');
+      
+      // Generate OTP for fallback mode only
+      const otp = generateOTP();
+      const expiresAt = new Date(Date.now() + 3 * 60 * 1000); // 3 minutes
+
+      // Store OTP in memory for fallback verification
+      records[email.toLowerCase()] = {
+        otp,
+        email: email.toLowerCase(),
+        expiresAt,
+        attempts: 0
+      };
+      saveOTPRecords(records);
+      
       console.log(`📧 OTP for ${email}: ${otp}`);
       console.log(`📧 Email would be sent to: ${email}`);
       
@@ -168,19 +169,48 @@ export async function verifyOTPEmail(email: string, otp: string): Promise<{ succ
         message: 'OTP verified successfully'
       };
     } else {
-      console.log('❌ OTP verification failed:', result.message);
-      return {
-        success: false,
-        message: result.message || 'OTP verification failed'
-      };
+      console.log('❌ Backend OTP verification failed:', result.message);
+      
+      // Try fallback verification (frontend stored OTP)
+      console.log('🔐 Trying fallback verification...');
+      const records = getOTPRecords();
+      const storedOTP = records[email.toLowerCase()];
+      
+      if (storedOTP && storedOTP.otp === otp && new Date(storedOTP.expiresAt) > new Date()) {
+        console.log('✅ OTP verified via fallback');
+        return {
+          success: true,
+          message: 'OTP verified successfully'
+        };
+      } else {
+        console.log('❌ Fallback verification also failed');
+        return {
+          success: false,
+          message: result.message || 'Invalid OTP. Please try again.'
+        };
+      }
     }
 
   } catch (error: any) {
     console.error('Verify OTP error:', error);
-    return {
-      success: false,
-      message: error.message || 'Failed to verify OTP'
-    };
+    
+    // Try fallback verification on network error
+    console.log('🔐 Network error, trying fallback verification...');
+    const records = getOTPRecords();
+    const storedOTP = records[email.toLowerCase()];
+    
+    if (storedOTP && storedOTP.otp === otp && new Date(storedOTP.expiresAt) > new Date()) {
+      console.log('✅ OTP verified via fallback');
+      return {
+        success: true,
+        message: 'OTP verified successfully'
+      };
+    } else {
+      return {
+        success: false,
+        message: error.message || 'Failed to verify OTP'
+      };
+    }
   }
 }
 
