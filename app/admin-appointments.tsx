@@ -31,6 +31,8 @@ export default function AdminAppointments() {
   const [showDoctorFilter, setShowDoctorFilter] = useState(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage] = useState<number>(10);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<any | null>(null);
 
   // Show all appointments when no filters are selected
   useEffect(() => {
@@ -238,6 +240,11 @@ export default function AdminAppointments() {
         },
       ]
     );
+  };
+
+  const handleViewAppointment = (appointment: any) => {
+    setSelectedAppointment(appointment);
+    setViewModalOpen(true);
   };
 
   // Filter appointments by date
@@ -649,7 +656,7 @@ export default function AdminAppointments() {
                   <View style={styles.detailRow}>
                     <Hash size={16} color="#6B7280" />
                     <ThemedText style={styles.detailText}>
-                      Token: {appointment.tokenNumber}
+                      Token: #{Number(String(appointment.tokenNumber).replace(/^#/, '').replace(/^0+/, '')) || 0}
                     </ThemedText>
                   </View>
                   {appointment.notes && (
@@ -663,6 +670,13 @@ export default function AdminAppointments() {
                 </View>
                 
                 <View style={styles.appointmentActions}>
+                  <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={() => handleViewAppointment(appointment)}
+                  >
+                    <FileText size={16} color="#059669" />
+                    <ThemedText style={styles.actionText}>View</ThemedText>
+                  </TouchableOpacity>
                   <TouchableOpacity 
                     style={styles.actionButton}
                     onPress={() => handleDeleteAppointment(appointment.id)}
@@ -695,6 +709,50 @@ export default function AdminAppointments() {
         doctors={doctors}
         isLoading={isLoading}
       />
+
+      {/* View Appointment Modal */}
+      <Modal
+        visible={viewModalOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setViewModalOpen(false)}
+      >
+        <View style={styles.datePickerModal}>
+          <View style={styles.datePickerContainer}>
+            <View style={styles.datePickerHeader}>
+              <ThemedText style={styles.datePickerTitle}>Appointment Details</ThemedText>
+              <TouchableOpacity 
+                style={styles.datePickerClose}
+                onPress={() => setViewModalOpen(false)}
+              >
+                <ThemedText style={styles.datePickerCloseText}>✕</ThemedText>
+              </TouchableOpacity>
+            </View>
+            {selectedAppointment && (
+              <View style={{ gap: 8 }}>
+                <ThemedText style={styles.viewDetail}>Patient: {selectedAppointment.patientName}</ThemedText>
+                <ThemedText style={styles.viewDetail}>Phone: {selectedAppointment.patientPhone}</ThemedText>
+                <ThemedText style={styles.viewDetail}>Doctor: Dr. {selectedAppointment.doctorName}</ThemedText>
+                <ThemedText style={styles.viewDetail}>Date: {selectedAppointment.appointmentDate}</ThemedText>
+                <ThemedText style={styles.viewDetail}>Time: {selectedAppointment.appointmentTime}</ThemedText>
+                <ThemedText style={styles.viewDetail}>Status: {selectedAppointment.status}</ThemedText>
+                <ThemedText style={styles.viewDetail}>Token: #{Number(String(selectedAppointment.tokenNumber).replace(/^#/, '').replace(/^0+/, '')) || 0}</ThemedText>
+                {selectedAppointment.notes ? (
+                  <ThemedText style={styles.viewDetail}>Notes: {selectedAppointment.notes}</ThemedText>
+                ) : null}
+              </View>
+            )}
+            <View style={{ marginTop: 16 }}>
+              <TouchableOpacity 
+                style={styles.datePickerConfirmButton}
+                onPress={() => setViewModalOpen(false)}
+              >
+                <ThemedText style={styles.datePickerConfirmText}>Close</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -946,6 +1004,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
+  viewDetail: { color: '#111827', fontSize: 14 },
   scrollView: {
     flex: 1,
   },

@@ -134,7 +134,7 @@ const AppointmentCard = ({ appointment, onViewDetails }: {
       </View>
     </View>
     <View style={styles.appointmentFooter}>
-      <ThemedText style={styles.appointmentToken}>Token: {appointment.tokenNumber}</ThemedText>
+      <ThemedText style={styles.appointmentToken}>Token: #{Number(String(appointment.tokenNumber).replace(/^#/, '').replace(/^0+/, '')) || 0}</ThemedText>
       <ChevronRight />
     </View>
   </TouchableOpacity>
@@ -257,7 +257,7 @@ export default function PatientDashboard() {
           }
         } else {
           // No user logged in, redirect to login
-          router.push('/patient-login');
+          router.push('/patient-auth');
         }
       } catch (error: any) {
         console.error('Error loading dashboard data:', error);

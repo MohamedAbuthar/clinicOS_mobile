@@ -190,7 +190,7 @@ export default function PatientRegister() {
         console.log('🔄 Redirecting to login...');
         
         // Redirect to login page with email pre-filled
-        router.replace(`/patient-login?email=${encodeURIComponent(formData.email)}`);
+        router.replace(`/patient-auth?email=${encodeURIComponent(formData.email)}`);
       } else {
         setError(response.message || 'Registration failed');
       }
@@ -212,7 +212,7 @@ export default function PatientRegister() {
   };
 
   const handleBackToLogin = () => {
-    router.push('/patient-login');
+    router.push('/patient-auth');
   };
 
   return (

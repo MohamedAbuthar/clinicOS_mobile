@@ -135,7 +135,7 @@ const AppointmentCard = ({ appointment, onViewDetails }: {
       </View>
     </View>
     <View style={styles.appointmentFooter}>
-      <ThemedText style={styles.appointmentToken}>Token: {appointment.tokenNumber}</ThemedText>
+      <ThemedText style={styles.appointmentToken}>Token: #{Number(String(appointment.tokenNumber).replace(/^#/, '').replace(/^0+/, '')) || 0}</ThemedText>
       <ChevronRight />
     </View>
   </TouchableOpacity>
@@ -197,7 +197,7 @@ function PatientDashboardContent() {
         } else {
           // No patient authenticated, redirect to login
           console.log('❌ No patient authenticated, redirecting to login');
-          router.push('/patient-login');
+          router.push('/patient-auth');
         }
       } catch (error: any) {
         console.error('Error loading dashboard data:', error);
@@ -226,7 +226,7 @@ function PatientDashboardContent() {
       setHasRedirected(true);
       // Use a longer timeout to prevent rapid redirects
       const timer = setTimeout(() => {
-        router.replace('/patient-login');
+        router.replace('/patient-auth');
       }, 500);
       return () => clearTimeout(timer);
     }

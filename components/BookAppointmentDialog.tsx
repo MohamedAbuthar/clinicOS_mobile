@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Path, Svg } from 'react-native-svg';
 import { ThemedText } from './themed-text';
 
@@ -131,6 +132,8 @@ export function BookAppointmentDialog({ isOpen, onClose, onSubmit, doctors, isLo
   const [reason, setReason] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [dateError, setDateError] = useState<string>('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerDate, setDatePickerDate] = useState(new Date());
 
   // Initialize with current date when dialog opens
   useEffect(() => {
@@ -138,6 +141,7 @@ export function BookAppointmentDialog({ isOpen, onClose, onSubmit, doctors, isLo
       const today = new Date();
       const formattedDate = today.toISOString().split('T')[0]; // YYYY-MM-DD format
       setSelectedDate(formattedDate);
+      setDatePickerDate(today);
       setDateError('');
     }
   }, [isOpen]);
@@ -180,6 +184,49 @@ export function BookAppointmentDialog({ isOpen, onClose, onSubmit, doctors, isLo
         }
         break;
     }
+  };
+
+  const handleDatePickerChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    if (selectedDate) {
+      setDatePickerDate(selectedDate);
+      const formattedDate = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+      setSelectedDate(formattedDate);
+      if (!validateDate(formattedDate)) {
+        setDateError('Please select a valid date (today or future, max 3 months)');
+      } else {
+        setDateError('');
+      }
+    }
+  };
+
+  const confirmDateSelection = () => {
+    setShowDatePicker(false);
+  };
+
+  const openDatePicker = () => {
+    // Set the date picker to the currently selected date or today
+    if (selectedDate) {
+      const date = new Date(selectedDate + 'T00:00:00');
+      if (!isNaN(date.getTime())) {
+        setDatePickerDate(date);
+      }
+    }
+    setShowDatePicker(true);
+  };
+
+  const formatDateDisplay = (dateString: string): string => {
+    if (!dateString) return '';
+    const date = new Date(dateString + 'T00:00:00');
+    if (isNaN(date.getTime())) return dateString;
+    
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
   };
 
   const handleDoctorSelect = (doctorId: string) => {
@@ -344,18 +391,47 @@ export function BookAppointmentDialog({ isOpen, onClose, onSubmit, doctors, isLo
                   <ThemedText style={styles.label}>
                     <Calendar /> Select Date <ThemedText style={styles.required}>*</ThemedText>
                   </ThemedText>
-                  <TextInput
-                    style={[styles.input, dateError && styles.inputError]}
-                    value={selectedDate}
-                    onChangeText={(value) => handleInputChange('date', value)}
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#9CA3AF"
-                    keyboardType="numeric"
-                  />
+                  <TouchableOpacity
+                    style={[styles.input, styles.dateInput, dateError && styles.inputError]}
+                    onPress={openDatePicker}
+                  >
+                    <ThemedText style={[styles.dateInputText, { color: selectedDate ? '#111827' : '#9CA3AF' }]}>
+                      {selectedDate ? formatDateDisplay(selectedDate) : 'Tap to select date'}
+                    </ThemedText>
+                    <Calendar />
+                  </TouchableOpacity>
                   {dateError ? (
                     <ThemedText style={styles.errorText}>{dateError}</ThemedText>
                   ) : null}
                 </View>
+
+                {/* Date Picker */}
+                {showDatePicker && (
+                  <View style={styles.pickerContainer}>
+                    <DateTimePicker
+                      value={datePickerDate}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      onChange={handleDatePickerChange}
+                      minimumDate={new Date()}
+                      maximumDate={((): Date => {
+                        const maxDate = new Date();
+                        maxDate.setMonth(maxDate.getMonth() + 3);
+                        return maxDate;
+                      })()}
+                    />
+                    {Platform.OS === 'ios' && (
+                      <View style={styles.pickerButtons}>
+                        <TouchableOpacity style={styles.pickerCancelButton} onPress={() => setShowDatePicker(false)}>
+                          <ThemedText style={styles.pickerCancelText}>Cancel</ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.pickerConfirmButton} onPress={confirmDateSelection}>
+                          <ThemedText style={styles.pickerConfirmText}>Confirm</ThemedText>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                )}
 
                 {/* Session Selection */}
                 <View style={styles.inputGroup}>
@@ -656,6 +732,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111827',
     backgroundColor: '#FFFFFF',
+  },
+  dateInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 12,
+  },
+  dateInputText: {
+    fontSize: 16,
+    flex: 1,
+  },
+  pickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 16,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  pickerButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  pickerCancelButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  pickerCancelText: {
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  pickerConfirmButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#14B8A6',
+    borderRadius: 6,
+  },
+  pickerConfirmText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '500',
   },
   textArea: {
     height: 80,

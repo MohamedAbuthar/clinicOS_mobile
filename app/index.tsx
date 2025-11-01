@@ -100,7 +100,7 @@ export default function MainDashboard() {
   };
 
   const handleBookAppointment = () => {
-    router.push('/patient-login');
+    router.push('/patient-auth');
   };
 
   // Always show all doctors

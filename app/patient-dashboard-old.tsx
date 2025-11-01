@@ -1,11 +1,11 @@
 import { ThemedText } from '@/components/themed-text';
+import { getCurrentUser, signOutUser } from '@/lib/firebase/auth';
+import { getAppointmentsByPatient } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View, Alert } from 'react-native';
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
-import { getCurrentUser, signOutUser } from '@/lib/firebase/auth';
-import { getAppointmentsByPatient, getDocuments } from '@/lib/firebase/firestore';
 
 // Custom SVG Components
 const Calendar = () => (
@@ -203,7 +203,7 @@ export default function PatientDashboard() {
           }
         } else {
           // No user logged in, redirect to login
-          router.push('/patient-login');
+          router.push('/patient-auth');
         }
       } catch (error) {
         console.error('Error loading user data:', error);

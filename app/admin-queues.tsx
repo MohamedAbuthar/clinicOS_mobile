@@ -1,10 +1,10 @@
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import {
-  getAllDoctors,
-  getAppointmentsByDoctorAndDate,
-  getDocuments,
-  updateQueueOrder
+    getAllDoctors,
+    getAppointmentsByDoctorAndDate,
+    getDocuments,
+    updateQueueOrder
 } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -260,7 +260,7 @@ export default function AdminQueues() {
           </TouchableOpacity>
           <View style={styles.itemContent}>
             <Text style={styles.itemText}>{item.name}</Text>
-            <Text style={styles.itemSubtext}>Token: #{item.tokenNumber}</Text>
+            <Text style={styles.itemSubtext}>Token: #{Number(String(item.tokenNumber).replace(/^#/, '').replace(/^0+/, '')) || 0}</Text>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: item.status === 'Checked In' ? '#10B981' : '#F59E0B' }]}>
             <Text style={styles.statusText}>{item.status}</Text>
