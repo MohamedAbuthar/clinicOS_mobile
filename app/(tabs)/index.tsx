@@ -85,7 +85,7 @@ export default function HomeScreen() {
   };
 
   const handlePatientPortal = () => {
-    router.push('/patient-login');
+    router.push('/patient-auth');
   };
 
   return (

@@ -5,7 +5,7 @@ import { useBackendPatientAuth } from '@/lib/contexts/BackendPatientAuthContext'
 import { getAppointmentsByPatient, getDoctorById } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 
@@ -37,6 +37,8 @@ function PatientAppointmentsContent() {
   const { patient } = useBackendPatientAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
 
   // Load appointments from Firebase
   useEffect(() => {
@@ -86,6 +88,10 @@ function PatientAppointmentsContent() {
                 }
               }
 
+              const normalizedToken = String(apt.tokenNumber || '')
+                .replace(/^#/, '')
+                .padStart(3, '0');
+
               return {
                 id: apt.id,
                 doctorName,
@@ -93,7 +99,7 @@ function PatientAppointmentsContent() {
                 appointmentDate: formattedDate,
                 appointmentTime: apt.appointmentTime || 'N/A',
                 status: apt.status || 'scheduled',
-                tokenNumber: apt.tokenNumber || 'N/A',
+                tokenNumber: normalizedToken || 'N/A',
               };
             })
           );
@@ -114,8 +120,8 @@ function PatientAppointmentsContent() {
 
 
   const handleViewAppointmentDetails = (appointment: Appointment) => {
-    console.log('View appointment details:', appointment.id);
-    // Navigation logic here
+    setSelectedAppointment(appointment);
+    setViewOpen(true);
   };
 
   return (
@@ -158,6 +164,39 @@ function PatientAppointmentsContent() {
           )}
         </View>
       </ScrollView>
+      {/* View Modal */}
+      <Modal
+        visible={viewOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setViewOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <ThemedText style={styles.modalTitle}>Appointment Details</ThemedText>
+              <TouchableOpacity onPress={() => setViewOpen(false)}>
+                <ThemedText style={styles.modalClose}>✕</ThemedText>
+              </TouchableOpacity>
+            </View>
+            {selectedAppointment && (
+              <View style={{ gap: 8 }}>
+                <ThemedText style={styles.modalDetail}>Doctor: {selectedAppointment.doctorName}</ThemedText>
+                <ThemedText style={styles.modalDetail}>Specialty: {selectedAppointment.doctorSpecialty}</ThemedText>
+                <ThemedText style={styles.modalDetail}>Date: {selectedAppointment.appointmentDate}</ThemedText>
+                <ThemedText style={styles.modalDetail}>Time: {selectedAppointment.appointmentTime}</ThemedText>
+                <ThemedText style={styles.modalDetail}>Status: {selectedAppointment.status}</ThemedText>
+                <ThemedText style={styles.modalDetail}>Token: #{Number(String(selectedAppointment.tokenNumber).replace(/^#/, '').replace(/^0+/, '')) || 0}</ThemedText>
+              </View>
+            )}
+            <View style={{ marginTop: 16 }}>
+              <TouchableOpacity style={styles.modalPrimary} onPress={() => setViewOpen(false)}>
+                <ThemedText style={styles.modalPrimaryText}>Close</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -237,4 +276,12 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
   },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalCard: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 20, margin: 20, minWidth: 300 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  modalTitle: { fontSize: 18, fontWeight: '600', color: '#111827' },
+  modalClose: { fontSize: 18, color: '#6B7280' },
+  modalDetail: { color: '#111827', fontSize: 14 },
+  modalPrimary: { backgroundColor: '#14B8A6', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
+  modalPrimaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
 });

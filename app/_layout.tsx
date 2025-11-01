@@ -23,6 +23,7 @@ export default function RootLayout() {
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
             <Stack.Screen name="auth-login" options={{ headerShown: false }} />
             <Stack.Screen name="patient-login" options={{ headerShown: false }} />
+            <Stack.Screen name="patient-auth" options={{ headerShown: false }} />
             <Stack.Screen name="admin-dashboard" options={{ headerShown: false }} />
             <Stack.Screen name="admin-appointments" options={{ headerShown: false }} />
             <Stack.Screen name="admin-appointment" options={{ headerShown: false }} />

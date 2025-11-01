@@ -1,17 +1,17 @@
 // Firestore database utilities for React Native
 import {
-    addDoc,
-    collection,
-    deleteDoc,
-    doc,
-    getDoc,
-    getDocs,
-    onSnapshot,
-    orderBy,
-    query,
-    Timestamp,
-    updateDoc,
-    where
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  orderBy,
+  query,
+  Timestamp,
+  updateDoc,
+  where
 } from 'firebase/firestore';
 import { db } from './config';
 
@@ -53,35 +53,38 @@ export const createAppointment = async (appointmentData: any) => {
     
     // Generate token number if not provided
     let tokenNumber = appointmentData.tokenNumber;
-    
+
     if (!tokenNumber) {
       console.log('🔄 No token provided, generating new token...');
-      
+
       // Get existing appointments for the same doctor and date
       const existingAppointmentsQuery = query(
         collection(db, collections.appointments),
         where('doctorId', '==', appointmentData.doctorId),
         where('appointmentDate', '==', appointmentData.appointmentDate)
       );
-      
+
       const existingAppointmentsSnapshot = await getDocs(existingAppointmentsQuery);
       const existingAppointments = existingAppointmentsSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      
+
       console.log(`📅 Found ${existingAppointments.length} existing appointments for doctor ${appointmentData.doctorId} on ${appointmentData.appointmentDate}`);
-      
-      // Generate next token number
-      const maxToken = existingAppointments.reduce((max, apt: any) => {
-        const token = parseInt(apt.tokenNumber || '0');
-        return token > max ? token : max;
-      }, 0);
-      
-      tokenNumber = (maxToken + 1).toString().padStart(3, '0');
-      console.log(`🎫 Generated token: ${tokenNumber}`);
+
+      // Normalize tokens -> numbers and get max
+      const maxAny = existingAppointments
+        .map((apt: any) => parseInt(String(apt.tokenNumber || '').replace(/^#/, ''), 10))
+        .filter((n: number) => Number.isFinite(n))
+        .reduce((m: number, n: number) => Math.max(m, n), 0);
+
+      const next = maxAny + 1; // strict sequential 1,2,3,4...
+      tokenNumber = String(next).padStart(3, '0');
+      console.log(`🎫 Generated token (sequential): ${tokenNumber}`);
     } else {
-      console.log(`🎫 Using provided token: ${tokenNumber}`);
+      // Normalize provided token
+      tokenNumber = String(tokenNumber).replace(/^#/, '').padStart(3, '0');
+      console.log(`🎫 Using provided token (normalized): ${tokenNumber}`);
     }
     
     const appointmentsRef = collection(db, collections.appointments);

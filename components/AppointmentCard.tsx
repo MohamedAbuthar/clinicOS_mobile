@@ -124,7 +124,9 @@ export function AppointmentCard({ appointment, onViewDetails }: AppointmentCardP
         {appointment.tokenNumber && (
           <View style={styles.detailItem}>
             <User />
-            <ThemedText style={styles.detailText}>Token #{appointment.tokenNumber}</ThemedText>
+            <ThemedText style={styles.detailText}>
+              #{Number(String(appointment.tokenNumber).replace(/^#/, '').replace(/^0+/, '')) || 0}
+            </ThemedText>
           </View>
         )}
       </View>

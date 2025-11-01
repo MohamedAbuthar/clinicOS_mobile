@@ -17,12 +17,15 @@ import {
     Alert,
     KeyboardTypeOptions,
     Modal,
+    Platform,
     ScrollView,
     StyleSheet,
     TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Picker } from '@react-native-picker/picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 
@@ -54,6 +57,24 @@ const UserIcon = () => (
   </Svg>
 );
 
+const CalendarIcon = () => (
+  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+    <Path d="M8 2V6M16 2V6M3 10H21M5 4H19C20.1046 4 21 4.89543 21 6V20C21 21.1046 20.1046 22 19 22H5C3.89543 22 3 21.1046 3 20V6C3 4.89543 3.89543 4 5 4Z" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
+const ChevronDownIcon = () => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M6 9L12 15L18 9"
+      stroke="#6B7280"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
 interface InfoFieldProps {
   label: string;
   value: string;
@@ -61,23 +82,131 @@ interface InfoFieldProps {
   onChangeText?: (text: string) => void;
   keyboardType?: KeyboardTypeOptions;
   multiline?: boolean;
+  isDateOfBirth?: boolean;
+  showDatePicker?: boolean;
+  onDatePickerToggle?: () => void;
+  datePickerDate?: Date;
+  onDatePickerChange?: (event: any, selectedDate?: Date) => void;
+  isGender?: boolean;
+  genderOptions?: string[];
 }
 
-const InfoField: React.FC<InfoFieldProps> = ({ label, value, editable, onChangeText, keyboardType = 'default', multiline = false }) => (
-  <View style={styles.infoItem}>
-    <ThemedText style={styles.infoLabel}>{label}</ThemedText>
-    <TextInput
-      style={[styles.infoInput, !editable && styles.disabledInput, multiline && styles.multilineInput]}
-      value={value}
-      editable={editable}
-      onChangeText={onChangeText}
-      keyboardType={keyboardType}
-      placeholderTextColor="#9CA3AF"
-      multiline={multiline}
-      numberOfLines={multiline ? 3 : 1}
-    />
-  </View>
-);
+const InfoField: React.FC<InfoFieldProps> = ({ 
+  label, 
+  value, 
+  editable, 
+  onChangeText, 
+  keyboardType = 'default', 
+  multiline = false,
+  isDateOfBirth = false,
+  showDatePicker = false,
+  onDatePickerToggle,
+  datePickerDate,
+  onDatePickerChange,
+  isGender = false,
+  genderOptions = ['male', 'female', 'others']
+}) => {
+  const formatDateDisplay = (dateString: string): string => {
+    if (!dateString) return '';
+    const date = new Date(dateString + 'T00:00:00');
+    if (isNaN(date.getTime())) return dateString;
+    
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const formatGenderDisplay = (gender: string): string => {
+    if (!gender) return 'Select gender';
+    return gender.charAt(0).toUpperCase() + gender.slice(1);
+  };
+
+  if (isDateOfBirth && editable) {
+    return (
+      <View style={styles.infoItem}>
+        <ThemedText style={styles.infoLabel}>{label}</ThemedText>
+        <TouchableOpacity
+          style={[styles.infoInput, styles.dateInput]}
+          onPress={onDatePickerToggle}
+        >
+          <ThemedText style={[styles.dateInputText, { color: value ? '#111827' : '#9CA3AF' }]}>
+            {value ? formatDateDisplay(value) : 'Tap to select date'}
+          </ThemedText>
+          <CalendarIcon />
+        </TouchableOpacity>
+        {showDatePicker && (
+          <View style={styles.pickerContainer}>
+            <DateTimePicker
+              value={datePickerDate || new Date()}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={onDatePickerChange}
+              maximumDate={new Date()}
+            />
+            {Platform.OS === 'ios' && onDatePickerToggle && (
+              <View style={styles.pickerButtons}>
+                <TouchableOpacity style={styles.pickerCancelButton} onPress={onDatePickerToggle}>
+                  <ThemedText style={styles.pickerCancelText}>Cancel</ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.pickerConfirmButton} onPress={onDatePickerToggle}>
+                  <ThemedText style={styles.pickerConfirmText}>Confirm</ThemedText>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  if (isGender && editable) {
+    return (
+      <View style={styles.infoItem}>
+        <ThemedText style={styles.infoLabel}>{label}</ThemedText>
+        <View style={styles.pickerWrapper}>
+          <Picker
+            selectedValue={value || ''}
+            onValueChange={(itemValue) => {
+              if (itemValue && onChangeText) {
+                onChangeText(itemValue);
+              }
+            }}
+            style={styles.picker}
+            dropdownIconColor="#6B7280"
+            mode="dropdown"
+          >
+            <Picker.Item label="Select gender" value="" />
+            {genderOptions.map((option) => (
+              <Picker.Item 
+                key={option} 
+                label={formatGenderDisplay(option)} 
+                value={option} 
+              />
+            ))}
+          </Picker>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.infoItem}>
+      <ThemedText style={styles.infoLabel}>{label}</ThemedText>
+      <TextInput
+        style={[styles.infoInput, !editable && styles.disabledInput, multiline && styles.multilineInput]}
+        value={value}
+        editable={editable}
+        onChangeText={onChangeText}
+        keyboardType={keyboardType}
+        placeholderTextColor="#9CA3AF"
+        multiline={multiline}
+        numberOfLines={multiline ? 3 : 1}
+      />
+    </View>
+  );
+};
 
 interface FamilyMemberData extends Partial<PatientProfile> {
   relationship?: string;
@@ -106,6 +235,14 @@ function PatientProfileContent() {
     email: '',
     relationship: '',
   });
+
+  // Date picker states
+  const [showProfileDatePicker, setShowProfileDatePicker] = useState(false);
+  const [profileDatePickerDate, setProfileDatePickerDate] = useState(new Date());
+  const [showAddMemberDatePicker, setShowAddMemberDatePicker] = useState(false);
+  const [addMemberDatePickerDate, setAddMemberDatePickerDate] = useState(new Date());
+  const [showEditMemberDatePicker, setShowEditMemberDatePicker] = useState(false);
+  const [editMemberDatePickerDate, setEditMemberDatePickerDate] = useState(new Date());
 
   useEffect(() => {
     if (patient) {
@@ -144,6 +281,69 @@ function PatientProfileContent() {
 
   const handleMemberFormChange = (field: keyof FamilyMemberData, value: string) => {
     setMemberFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleProfileDatePickerChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowProfileDatePicker(false);
+    }
+    if (selectedDate) {
+      setProfileDatePickerDate(selectedDate);
+      const formattedDate = selectedDate.toISOString().split('T')[0];
+      handleFormChange('dateOfBirth', formattedDate);
+    }
+  };
+
+  const handleAddMemberDatePickerChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowAddMemberDatePicker(false);
+    }
+    if (selectedDate) {
+      setAddMemberDatePickerDate(selectedDate);
+      const formattedDate = selectedDate.toISOString().split('T')[0];
+      handleMemberFormChange('dateOfBirth', formattedDate);
+    }
+  };
+
+  const handleEditMemberDatePickerChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowEditMemberDatePicker(false);
+    }
+    if (selectedDate) {
+      setEditMemberDatePickerDate(selectedDate);
+      const formattedDate = selectedDate.toISOString().split('T')[0];
+      handleMemberFormChange('dateOfBirth', formattedDate);
+    }
+  };
+
+  const openProfileDatePicker = () => {
+    if (formData.dateOfBirth) {
+      const date = new Date(formData.dateOfBirth + 'T00:00:00');
+      if (!isNaN(date.getTime())) {
+        setProfileDatePickerDate(date);
+      }
+    }
+    setShowProfileDatePicker(true);
+  };
+
+  const openAddMemberDatePicker = () => {
+    if (memberFormData.dateOfBirth) {
+      const date = new Date(memberFormData.dateOfBirth + 'T00:00:00');
+      if (!isNaN(date.getTime())) {
+        setAddMemberDatePickerDate(date);
+      }
+    }
+    setShowAddMemberDatePicker(true);
+  };
+
+  const openEditMemberDatePicker = () => {
+    if (memberFormData.dateOfBirth) {
+      const date = new Date(memberFormData.dateOfBirth + 'T00:00:00');
+      if (!isNaN(date.getTime())) {
+        setEditMemberDatePickerDate(date);
+      }
+    }
+    setShowEditMemberDatePicker(true);
   };
 
   const handleSaveChanges = async () => {
@@ -326,8 +526,25 @@ function PatientProfileContent() {
           <View style={styles.sectionCard}>
             <ThemedText style={styles.sectionTitle}>Personal Information</ThemedText>
             <InfoField label="Full Name" value={profileData.name || ''} editable={isEditing} onChangeText={(v) => handleFormChange('name', v)} />
-            <InfoField label="Date of Birth (YYYY-MM-DD)" value={profileData.dateOfBirth || ''} editable={isEditing} onChangeText={(v) => handleFormChange('dateOfBirth', v)} />
-            <InfoField label="Gender" value={profileData.gender || ''} editable={isEditing} onChangeText={(v) => handleFormChange('gender', v)} />
+            <InfoField 
+              label="Date of Birth (YYYY-MM-DD)" 
+              value={profileData.dateOfBirth || ''} 
+              editable={isEditing} 
+              onChangeText={(v) => handleFormChange('dateOfBirth', v)}
+              isDateOfBirth={true}
+              showDatePicker={showProfileDatePicker}
+              onDatePickerToggle={openProfileDatePicker}
+              datePickerDate={profileDatePickerDate}
+              onDatePickerChange={handleProfileDatePickerChange}
+            />
+            <InfoField 
+              label="Gender" 
+              value={profileData.gender || ''} 
+              editable={isEditing} 
+              onChangeText={(v) => handleFormChange('gender', v)}
+              isGender={true}
+              genderOptions={['male', 'female', 'others']}
+            />
           </View>
 
           {/* Contact Information */}
@@ -424,8 +641,25 @@ function PatientProfileContent() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <InfoField label="Full Name *" value={memberFormData.name || ''} editable={true} onChangeText={(v) => handleMemberFormChange('name', v)} />
               <InfoField label="Relationship" value={memberFormData.relationship || ''} editable={true} onChangeText={(v) => handleMemberFormChange('relationship', v)} />
-              <InfoField label="Date of Birth (YYYY-MM-DD) *" value={memberFormData.dateOfBirth || ''} editable={true} onChangeText={(v) => handleMemberFormChange('dateOfBirth', v)} />
-              <InfoField label="Gender (male/female/other) *" value={memberFormData.gender || ''} editable={true} onChangeText={(v) => handleMemberFormChange('gender', v)} />
+              <InfoField 
+                label="Date of Birth (YYYY-MM-DD) *" 
+                value={memberFormData.dateOfBirth || ''} 
+                editable={true} 
+                onChangeText={(v) => handleMemberFormChange('dateOfBirth', v)}
+                isDateOfBirth={true}
+                showDatePicker={showAddMemberDatePicker}
+                onDatePickerToggle={openAddMemberDatePicker}
+                datePickerDate={addMemberDatePickerDate}
+                onDatePickerChange={handleAddMemberDatePickerChange}
+              />
+              <InfoField 
+                label="Gender *" 
+                value={memberFormData.gender || ''} 
+                editable={true} 
+                onChangeText={(v) => handleMemberFormChange('gender', v)}
+                isGender={true}
+                genderOptions={['male', 'female', 'others']}
+              />
               <InfoField label="Phone Number" value={memberFormData.phone || ''} editable={true} onChangeText={(v) => handleMemberFormChange('phone', v)} keyboardType="phone-pad" />
               <InfoField label="Email Address" value={memberFormData.email || ''} editable={true} onChangeText={(v) => handleMemberFormChange('email', v)} keyboardType="email-address" />
             </ScrollView>
@@ -454,8 +688,25 @@ function PatientProfileContent() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <InfoField label="Full Name *" value={memberFormData.name || ''} editable={true} onChangeText={(v) => handleMemberFormChange('name', v)} />
               <InfoField label="Relationship" value={memberFormData.relationship || ''} editable={true} onChangeText={(v) => handleMemberFormChange('relationship', v)} />
-              <InfoField label="Date of Birth (YYYY-MM-DD) *" value={memberFormData.dateOfBirth || ''} editable={true} onChangeText={(v) => handleMemberFormChange('dateOfBirth', v)} />
-              <InfoField label="Gender (male/female/other) *" value={memberFormData.gender || ''} editable={true} onChangeText={(v) => handleMemberFormChange('gender', v)} />
+              <InfoField 
+                label="Date of Birth (YYYY-MM-DD) *" 
+                value={memberFormData.dateOfBirth || ''} 
+                editable={true} 
+                onChangeText={(v) => handleMemberFormChange('dateOfBirth', v)}
+                isDateOfBirth={true}
+                showDatePicker={showEditMemberDatePicker}
+                onDatePickerToggle={openEditMemberDatePicker}
+                datePickerDate={editMemberDatePickerDate}
+                onDatePickerChange={handleEditMemberDatePickerChange}
+              />
+              <InfoField 
+                label="Gender *" 
+                value={memberFormData.gender || ''} 
+                editable={true} 
+                onChangeText={(v) => handleMemberFormChange('gender', v)}
+                isGender={true}
+                genderOptions={['male', 'female', 'others']}
+              />
               <InfoField label="Phone Number" value={memberFormData.phone || ''} editable={true} onChangeText={(v) => handleMemberFormChange('phone', v)} keyboardType="phone-pad" />
               <InfoField label="Email Address" value={memberFormData.email || ''} editable={true} onChangeText={(v) => handleMemberFormChange('email', v)} keyboardType="email-address" />
             </ScrollView>
@@ -603,6 +854,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111827',
     backgroundColor: '#FFFFFF',
+  },
+  dateInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 12,
   },
   multilineInput: {
     minHeight: 80,
@@ -810,5 +1067,60 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  dateInputText: {
+    fontSize: 16,
+    flex: 1,
+  },
+  pickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 16,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  pickerButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  pickerCancelButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  pickerCancelText: {
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  pickerConfirmButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#14B8A6',
+    borderRadius: 6,
+  },
+  pickerConfirmText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '500',
+  },
+  pickerWrapper: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    minHeight: 50,
+    justifyContent: 'center',
+  },
+  picker: {
+    width: '100%',
+    height: 50,
+    color: '#111827',
+    backgroundColor: 'transparent',
   },
 });

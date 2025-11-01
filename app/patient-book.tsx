@@ -2,7 +2,7 @@ import { BookAppointmentDialog } from '@/components/BookAppointmentDialog';
 import PatientLayout from '@/components/PatientLayout';
 import { ThemedText } from '@/components/themed-text';
 import { useBackendPatientAuth } from '@/lib/contexts/BackendPatientAuthContext';
-import { createDocument, getAllDoctors, getDocuments } from '@/lib/firebase/firestore';
+import { createAppointment, getAllDoctors } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -66,6 +66,9 @@ function PatientBookContent() {
             }));
             setDoctors(formattedDoctors);
           }
+        } else {
+          // If no patient is authenticated, redirect to auth page
+          router.replace('/patient-auth');
         }
       } catch (error) {
         console.error('Error loading data:', error);
@@ -74,7 +77,7 @@ function PatientBookContent() {
     };
 
     loadData();
-  }, [patient]);
+  }, [patient, router]);
 
 
   const handleBookAppointment = async (appointmentData: any) => {
@@ -83,42 +86,36 @@ function PatientBookContent() {
       console.log('Starting appointment booking with data:', appointmentData);
       
       if (!user) {
-        Alert.alert('Error', 'Please log in to book an appointment');
+        Alert.alert('Authentication Required', 'Please log in to book an appointment', [
+          {
+            text: 'Login',
+            onPress: () => router.push('/patient-auth')
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          }
+        ]);
         return;
       }
 
       console.log('User data:', { id: user.id, name: user.name });
 
-      // Generate token number (simple increment for now)
-      console.log('Fetching existing appointments...');
-      const appointmentsResult = await getDocuments('appointments');
-      console.log('Appointments result:', appointmentsResult);
-      
-      const existingAppointments = appointmentsResult.success && appointmentsResult.data ? appointmentsResult.data : [];
-      const tokenNumber = (existingAppointments.length + 1).toString();
-      console.log('Generated token number:', tokenNumber);
-
-      // Create appointment document
-      const appointmentDoc = {
+      // Create appointment using centralized helper (generates web-style token e.g. 001)
+      const result = await createAppointment({
         patientId: user.id,
         patientName: user.name || 'Unknown Patient',
         doctorId: appointmentData.doctorId,
-        doctorName: appointmentData.doctorName,
-        specialty: appointmentData.specialty,
         appointmentDate: appointmentData.date,
         appointmentTime: appointmentData.time,
-        status: 'scheduled',
-        tokenNumber: tokenNumber,
         notes: appointmentData.notes || '',
-        // createdAt and updatedAt will be automatically added by createDocument
-      };
-
-      console.log('Creating appointment document:', appointmentDoc);
-      const result = await createDocument('appointments', appointmentDoc);
+        source: 'mobile',
+        createdBy: 'mobile_app'
+      });
       console.log('Create document result:', result);
       
       if (result.success) {
-        console.log('Appointment created successfully with ID:', result.id);
+        console.log('Appointment created successfully with ID:', result.data?.id);
         Alert.alert('Success', 'Appointment booked successfully!', [
           {
             text: 'OK',

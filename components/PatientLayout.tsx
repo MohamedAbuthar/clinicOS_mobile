@@ -48,14 +48,14 @@ export default function PatientLayout({ children }: PatientLayoutProps) {
     // Redirect to login if not authenticated
     if (!authLoading && !isAuthenticated) {
       console.log('❌ Not authenticated, redirecting to login');
-      router.replace('/patient-login');
+      router.replace('/patient-auth');
     }
   }, [isAuthenticated, authLoading, router]);
 
   const handleLogout = async () => {
     try {
       await logout();
-      router.replace('/patient-login');
+      router.replace('/patient-auth');
     } catch (error) {
       Alert.alert('Error', 'Failed to logout');
     }

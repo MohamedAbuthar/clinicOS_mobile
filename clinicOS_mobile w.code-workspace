@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../clinicOS_web_new"
+		}
+	],
+	"settings": {
+		"typescript.preferences.includePackageJsonAutoImports": "on"
+	}
+}
