@@ -7,6 +7,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 
 // Custom SVG Components
+const ArrowLeft = () => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M19 12H5M12 19L5 12L12 5"
+      stroke="#374151"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
 const ClinicFlowLogo = () => (
   <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
     <Path
@@ -55,6 +67,18 @@ const Loader2 = () => (
   </Svg>
 );
 
+const ChevronDown = () => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M6 9L12 15L18 9"
+      stroke="#6B7280"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
 export default function AuthLogin() {
   const router = useRouter();
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -64,6 +88,7 @@ export default function AuthLogin() {
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<'admin' | 'doctor' | 'assistant'>('admin');
+  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -73,6 +98,10 @@ export default function AuthLogin() {
       router.replace('/admin-dashboard');
     }
   }, [isAuthenticated, authLoading, router]);
+
+  const handleBackToHome = () => {
+    router.push('/');
+  };
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -104,6 +133,12 @@ export default function AuthLogin() {
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
+          {/* Back to Home Button */}
+          <TouchableOpacity style={styles.backButton} onPress={handleBackToHome}>
+            <ArrowLeft />
+            <ThemedText style={styles.backText}>Back to Home</ThemedText>
+          </TouchableOpacity>
+
           <View style={styles.card}>
             {/* Success Message */}
             {successMessage && (
@@ -137,7 +172,10 @@ export default function AuthLogin() {
             <View style={styles.tabContainer}>
               <TouchableOpacity
                 style={[styles.tab, activeTab === 'login' && styles.activeTab]}
-                onPress={() => setActiveTab('login')}
+                onPress={() => {
+                  setActiveTab('login');
+                  setIsRoleDropdownOpen(false);
+                }}
               >
                 <ThemedText style={[styles.tabText, activeTab === 'login' && styles.activeTabText]}>
                   Login
@@ -145,7 +183,10 @@ export default function AuthLogin() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.tab, activeTab === 'signup' && styles.activeTab]}
-                onPress={() => setActiveTab('signup')}
+                onPress={() => {
+                  setActiveTab('signup');
+                  setIsRoleDropdownOpen(false);
+                }}
               >
                 <ThemedText style={[styles.tabText, activeTab === 'signup' && styles.activeTabText]}>
                   Sign Up
@@ -202,36 +243,53 @@ export default function AuthLogin() {
               {activeTab === 'signup' && (
                 <View style={styles.inputContainer}>
                   <ThemedText style={styles.label}>Role</ThemedText>
-                  <View style={styles.selectContainer}>
-                    <ThemedText style={styles.selectText}>
-                      {role === 'admin' ? 'Administrator' : role === 'doctor' ? 'Doctor' : 'Assistant'}
-                    </ThemedText>
-                    <View style={styles.selectOptions}>
-                      <TouchableOpacity
-                        style={[styles.selectOption, role === 'admin' && styles.selectedOption]}
-                        onPress={() => setRole('admin')}
-                      >
-                        <ThemedText style={[styles.selectOptionText, role === 'admin' && styles.selectedOptionText]}>
-                          Administrator
-                        </ThemedText>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.selectOption, role === 'doctor' && styles.selectedOption]}
-                        onPress={() => setRole('doctor')}
-                      >
-                        <ThemedText style={[styles.selectOptionText, role === 'doctor' && styles.selectedOptionText]}>
-                          Doctor
-                        </ThemedText>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.selectOption, role === 'assistant' && styles.selectedOption]}
-                        onPress={() => setRole('assistant')}
-                      >
-                        <ThemedText style={[styles.selectOptionText, role === 'assistant' && styles.selectedOptionText]}>
-                          Assistant
-                        </ThemedText>
-                      </TouchableOpacity>
-                    </View>
+                  <View style={styles.selectWrapper}>
+                    <TouchableOpacity
+                      style={styles.selectContainer}
+                      onPress={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
+                    >
+                      <ThemedText style={styles.selectText}>
+                        {role === 'admin' ? 'Administrator' : role === 'doctor' ? 'Doctor' : 'Assistant'}
+                      </ThemedText>
+                      <ChevronDown />
+                    </TouchableOpacity>
+                    {isRoleDropdownOpen && (
+                      <View style={styles.selectOptions}>
+                        <TouchableOpacity
+                          style={[styles.selectOption, role === 'admin' && styles.selectedOption]}
+                          onPress={() => {
+                            setRole('admin');
+                            setIsRoleDropdownOpen(false);
+                          }}
+                        >
+                          <ThemedText style={[styles.selectOptionText, role === 'admin' && styles.selectedOptionText]}>
+                            Administrator
+                          </ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.selectOption, role === 'doctor' && styles.selectedOption]}
+                          onPress={() => {
+                            setRole('doctor');
+                            setIsRoleDropdownOpen(false);
+                          }}
+                        >
+                          <ThemedText style={[styles.selectOptionText, role === 'doctor' && styles.selectedOptionText]}>
+                            Doctor
+                          </ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.selectOption, role === 'assistant' && styles.selectedOption]}
+                          onPress={() => {
+                            setRole('assistant');
+                            setIsRoleDropdownOpen(false);
+                          }}
+                        >
+                          <ThemedText style={[styles.selectOptionText, role === 'assistant' && styles.selectedOptionText]}>
+                            Assistant
+                          </ThemedText>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
                 </View>
               )}
@@ -289,6 +347,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 32,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  backText: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: '#374151',
+    marginLeft: 8,
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -407,6 +476,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111827',
   },
+  selectWrapper: {
+    position: 'relative',
+  },
   selectContainer: {
     backgroundColor: '#F9FAFB',
     borderWidth: 1,
@@ -414,6 +486,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   selectText: {
     fontSize: 16,
@@ -430,6 +505,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 4,
     zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   selectOption: {
     paddingHorizontal: 16,
