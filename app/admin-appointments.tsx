@@ -27,6 +27,20 @@ export default function AdminAppointments() {
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [tempSelectedDate, setTempSelectedDate] = useState<Date>(new Date());
+
+  // Ensure tempSelectedDate is not in the past when opening date picker
+  const handleOpenDatePicker = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selected = new Date(tempSelectedDate);
+    selected.setHours(0, 0, 0, 0);
+    
+    // If selected date is in the past, set to today
+    if (selected < today) {
+      setTempSelectedDate(today);
+    }
+    setShowDatePicker(true);
+  };
   const [selectedDoctor, setSelectedDoctor] = useState<string>('');
   const [showDoctorFilter, setShowDoctorFilter] = useState(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -34,10 +48,10 @@ export default function AdminAppointments() {
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<any | null>(null);
 
-  // Show all appointments when no filters are selected
+  // Show no appointments when no doctor is selected
   useEffect(() => {
-    if (appointments.length > 0 && !selectedDate && !selectedDoctor) {
-      setFilteredAppointments(appointments);
+    if (!selectedDoctor) {
+      setFilteredAppointments([]);
     }
   }, [appointments, selectedDate, selectedDoctor]);
 
@@ -103,6 +117,8 @@ export default function AdminAppointments() {
               };
             });
             setAppointments(transformedAppointments);
+            // Don't show any appointments initially - only show when doctor is selected
+            setFilteredAppointments([]);
           } else {
             console.log('Admin Appointments - Failed to load appointments, using fallback data');
             // Fallback data for testing
@@ -135,6 +151,8 @@ export default function AdminAppointments() {
               }
             ];
             setAppointments(fallbackAppointments);
+            // Don't show any appointments initially - only show when doctor is selected
+            setFilteredAppointments([]);
           }
         } else {
           router.push('/auth-login');
@@ -168,10 +186,35 @@ export default function AdminAppointments() {
   const handleDatePickerChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
     if (selectedDate) {
-      setTempSelectedDate(selectedDate);
-      const dateString = selectedDate.toISOString().split('T')[0];
-      setSelectedDate(dateString);
-      setFilteredAppointments(filterAppointmentsByDate(appointments, dateString));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const selected = new Date(selectedDate);
+      selected.setHours(0, 0, 0, 0);
+      
+      // Only allow current date or future dates
+      if (selected >= today) {
+        setTempSelectedDate(selectedDate);
+        const dateString = selectedDate.toISOString().split('T')[0];
+        setSelectedDate(dateString);
+        // Only filter if doctor is selected
+        if (selectedDoctor) {
+          setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, dateString, selectedDoctor));
+        } else {
+          setFilteredAppointments([]);
+        }
+      } else {
+        // If past date selected, use today's date
+        const todayDate = new Date();
+        setTempSelectedDate(todayDate);
+        const todayString = todayDate.toISOString().split('T')[0];
+        setSelectedDate(todayString);
+        // Only filter if doctor is selected
+        if (selectedDoctor) {
+          setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, todayString, selectedDoctor));
+        } else {
+          setFilteredAppointments([]);
+        }
+      }
     }
   };
 
@@ -179,28 +222,45 @@ export default function AdminAppointments() {
   const handleDateFilterChange = (date: string) => {
     setSelectedDate(date);
     resetPagination();
-    setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, date, selectedDoctor));
+    // Only filter if doctor is selected
+    if (selectedDoctor) {
+      setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, date, selectedDoctor));
+    } else {
+      setFilteredAppointments([]);
+    }
   };
 
   // Clear date filter
   const clearDateFilter = () => {
     setSelectedDate('');
     resetPagination();
-    setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, '', selectedDoctor));
+    // Only filter if doctor is selected (with today's date as default)
+    if (selectedDoctor) {
+      const today = new Date().toISOString().split('T')[0];
+      setSelectedDate(today);
+      setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, today, selectedDoctor));
+    } else {
+      setFilteredAppointments([]);
+    }
   };
 
   // Handle doctor filter change
   const handleDoctorFilterChange = (doctorId: string) => {
     setSelectedDoctor(doctorId);
+    // Automatically set to today's date when doctor is selected
+    const today = new Date().toISOString().split('T')[0];
+    setSelectedDate(today);
     resetPagination();
-    setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, selectedDate, doctorId));
+    // Filter by doctor and today's date
+    setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, today, doctorId));
   };
 
   // Clear doctor filter
   const clearDoctorFilter = () => {
     setSelectedDoctor('');
+    setSelectedDate('');
     resetPagination();
-    setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, selectedDate, ''));
+    setFilteredAppointments([]);
   };
 
   // Set today's date
@@ -208,7 +268,12 @@ export default function AdminAppointments() {
     const today = new Date().toISOString().split('T')[0];
     setSelectedDate(today);
     resetPagination();
-    setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, today, selectedDoctor));
+    // Only filter if doctor is selected
+    if (selectedDoctor) {
+      setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, today, selectedDoctor));
+    } else {
+      setFilteredAppointments([]);
+    }
   };
 
   // Delete appointment
@@ -230,7 +295,13 @@ export default function AdminAppointments() {
               // For now, we'll just remove it from the local state
               const updatedAppointments = appointments.filter(apt => apt.id !== appointmentId);
               setAppointments(updatedAppointments);
-              setFilteredAppointments(filterAppointmentsByDate(updatedAppointments, selectedDate));
+              // Only filter if doctor is selected
+              if (selectedDoctor) {
+                const today = selectedDate || new Date().toISOString().split('T')[0];
+                setFilteredAppointments(filterAppointmentsByDateAndDoctor(updatedAppointments, today, selectedDoctor));
+              } else {
+                setFilteredAppointments([]);
+              }
               Alert.alert('Success', 'Appointment deleted successfully');
             } catch (error) {
               console.error('Error deleting appointment:', error);
@@ -327,8 +398,13 @@ export default function AdminAppointments() {
                       appointment.status === 'scheduled' ? '#F59E0B' : '#6B7280'
         }));
         setAppointments(transformedAppointments);
-        // Show all appointments initially if no filters are selected
-        setFilteredAppointments(transformedAppointments);
+        // Only show appointments if doctor is selected
+        if (selectedDoctor) {
+          const today = selectedDate || new Date().toISOString().split('T')[0];
+          setFilteredAppointments(filterAppointmentsByDateAndDoctor(transformedAppointments, today, selectedDoctor));
+        } else {
+          setFilteredAppointments([]);
+        }
         console.log('Loaded appointments:', transformedAppointments.length);
       } else {
         console.log('Admin Appointments - Failed to load appointments, using fallback data');
@@ -362,8 +438,13 @@ export default function AdminAppointments() {
           }
         ];
         setAppointments(fallbackAppointments);
-        // Show all fallback appointments initially
-        setFilteredAppointments(fallbackAppointments);
+        // Only show appointments if doctor is selected
+        if (selectedDoctor) {
+          const today = selectedDate || new Date().toISOString().split('T')[0];
+          setFilteredAppointments(filterAppointmentsByDateAndDoctor(fallbackAppointments, today, selectedDoctor));
+        } else {
+          setFilteredAppointments([]);
+        }
         console.log('Using fallback appointments:', fallbackAppointments.length);
       }
     } catch (error) {
@@ -472,50 +553,6 @@ export default function AdminAppointments() {
         </TouchableOpacity>
       </View>
 
-      {/* Date Filter */}
-      <View style={styles.filterSection}>
-        <TouchableOpacity 
-          style={styles.filterButton} 
-          onPress={() => setShowDateFilter(!showDateFilter)}
-        >
-          <Filter size={16} color="#6B7280" />
-          <ThemedText style={styles.filterButtonText}>
-            {selectedDate ? `Filter: ${selectedDate}` : 'Filter by Date'}
-          </ThemedText>
-        </TouchableOpacity>
-        
-        {showDateFilter && (
-          <View style={styles.dateFilterContainer}>
-            <View style={styles.dateInputContainer}>
-              <Calendar size={16} color="#6B7280" />
-              <ThemedText style={styles.dateInputLabel}>Select Date:</ThemedText>
-              <View style={styles.dateInputRow}>
-                <TouchableOpacity 
-                  style={styles.dateInput}
-                  onPress={() => setShowDatePicker(true)}
-                >
-                  <ThemedText style={styles.dateInputText}>
-                    {selectedDate || 'Select a date'}
-                  </ThemedText>
-                  <Calendar size={16} color="#6B7280" />
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.todayButton}
-                  onPress={setTodayDate}
-                >
-                  <ThemedText style={styles.todayButtonText}>Today</ThemedText>
-                </TouchableOpacity>
-              </View>
-            </View>
-            {selectedDate && (
-              <TouchableOpacity style={styles.clearFilterButton} onPress={clearDateFilter}>
-                <ThemedText style={styles.clearFilterText}>Clear Filter</ThemedText>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </View>
-
       {/* Doctor Filter */}
       <View style={styles.filterSection}>
         <TouchableOpacity 
@@ -561,6 +598,50 @@ export default function AdminAppointments() {
         )}
       </View>
 
+      {/* Date Filter */}
+      <View style={styles.filterSection}>
+        <TouchableOpacity 
+          style={styles.filterButton} 
+          onPress={() => setShowDateFilter(!showDateFilter)}
+        >
+          <Filter size={16} color="#6B7280" />
+          <ThemedText style={styles.filterButtonText}>
+            {selectedDate ? `Filter: ${selectedDate}` : 'Filter by Date'}
+          </ThemedText>
+        </TouchableOpacity>
+        
+        {showDateFilter && (
+          <View style={styles.dateFilterContainer}>
+            <View style={styles.dateInputContainer}>
+              <Calendar size={16} color="#6B7280" />
+              <ThemedText style={styles.dateInputLabel}>Select Date:</ThemedText>
+              <View style={styles.dateInputRow}>
+                <TouchableOpacity 
+                  style={styles.dateInput}
+                  onPress={handleOpenDatePicker}
+                >
+                  <ThemedText style={styles.dateInputText}>
+                    {selectedDate || 'Select a date'}
+                  </ThemedText>
+                  <Calendar size={16} color="#6B7280" />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.todayButton}
+                  onPress={setTodayDate}
+                >
+                  <ThemedText style={styles.todayButtonText}>Today</ThemedText>
+                </TouchableOpacity>
+              </View>
+            </View>
+            {selectedDate && (
+              <TouchableOpacity style={styles.clearFilterButton} onPress={clearDateFilter}>
+                <ThemedText style={styles.clearFilterText}>Clear Filter</ThemedText>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </View>
+
       {/* Date Picker Modal */}
       <Modal
         visible={showDatePicker}
@@ -584,7 +665,7 @@ export default function AdminAppointments() {
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
               onChange={handleDatePickerChange}
-              minimumDate={new Date(2020, 0, 1)}
+              minimumDate={new Date()}
               maximumDate={new Date(2030, 11, 31)}
             />
             {Platform.OS === 'ios' && (
@@ -598,9 +679,22 @@ export default function AdminAppointments() {
                 <TouchableOpacity 
                   style={styles.datePickerConfirmButton}
                   onPress={() => {
-                    const dateString = tempSelectedDate.toISOString().split('T')[0];
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const selected = new Date(tempSelectedDate);
+                    selected.setHours(0, 0, 0, 0);
+                    
+                    // Only allow current date or future dates
+                    const finalDate = selected >= today ? tempSelectedDate : today;
+                    const dateString = finalDate.toISOString().split('T')[0];
                     setSelectedDate(dateString);
-                    setFilteredAppointments(filterAppointmentsByDate(appointments, dateString));
+                    setTempSelectedDate(finalDate);
+                    // Only filter if doctor is selected
+                    if (selectedDoctor) {
+                      setFilteredAppointments(filterAppointmentsByDateAndDoctor(appointments, dateString, selectedDoctor));
+                    } else {
+                      setFilteredAppointments([]);
+                    }
                     setShowDatePicker(false);
                   }}
                 >
@@ -625,9 +719,30 @@ export default function AdminAppointments() {
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
+          {/* Empty State - No Doctor Selected */}
+          {!selectedDoctor && (
+            <View style={styles.emptyState}>
+              <ThemedText style={styles.emptyTitle}>Select Doctor to View Appointments</ThemedText>
+              <ThemedText style={styles.emptySubtitle}>
+                Please select a doctor from the filter above to view their appointments
+              </ThemedText>
+            </View>
+          )}
+
+          {/* Empty State - No Appointments Found */}
+          {selectedDoctor && filteredAppointments.length === 0 && (
+            <View style={styles.emptyState}>
+              <ThemedText style={styles.emptyTitle}>No Appointments Found</ThemedText>
+              <ThemedText style={styles.emptySubtitle}>
+                No appointments found for the selected doctor and date
+              </ThemedText>
+            </View>
+          )}
+
           {/* Appointment Cards */}
-          <View style={styles.appointmentsList}>
-            {getPaginatedAppointments(filteredAppointments).map((appointment) => (
+          {selectedDoctor && filteredAppointments.length > 0 && (
+            <View style={styles.appointmentsList}>
+              {getPaginatedAppointments(filteredAppointments).map((appointment) => (
               <View key={appointment.id} style={styles.appointmentCard}>
                 <View style={styles.appointmentHeader}>
                   <View style={styles.appointmentInfo}>
@@ -686,18 +801,21 @@ export default function AdminAppointments() {
                   </TouchableOpacity>
                 </View>
               </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          )}
 
           {/* Pagination Controls */}
-          <PaginationComponent
+          {selectedDoctor && filteredAppointments.length > 0 && (
+            <PaginationComponent
             currentPage={currentPage}
             totalPages={getTotalPages(filteredAppointments)}
             totalItems={filteredAppointments.length}
             itemsPerPage={itemsPerPage}
             onPageChange={handlePageChange}
             onDoublePageChange={handleDoublePageChange}
-          />
+            />
+          )}
         </View>
       </ScrollView>
 
