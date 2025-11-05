@@ -1,17 +1,17 @@
 // Firestore database utilities for React Native
 import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  onSnapshot,
-  orderBy,
-  query,
-  Timestamp,
-  updateDoc,
-  where
+    addDoc,
+    collection,
+    deleteDoc,
+    doc,
+    getDoc,
+    getDocs,
+    onSnapshot,
+    orderBy,
+    query,
+    Timestamp,
+    updateDoc,
+    where
 } from 'firebase/firestore';
 import { db } from './config';
 
@@ -606,29 +606,51 @@ export const updateDoctor = async (doctorId: string, doctorData: any) => {
       };
     }
     
-    // Update user document
+    // Update user document (only if fields are provided and not undefined)
     const userRef = doc(db, collections.users, userId);
-    const userUpdateData = {
-      name: doctorData.name,
-      email: doctorData.email,
-      phone: doctorData.phone,
+    const userUpdateData: any = {
       updatedAt: Timestamp.now()
     };
     
-    await updateDoc(userRef, userUpdateData);
-    console.log('updateDoctor: Updated user document');
+    if (doctorData.name !== undefined && doctorData.name !== null) {
+      userUpdateData.name = doctorData.name;
+    }
+    if (doctorData.email !== undefined && doctorData.email !== null) {
+      userUpdateData.email = doctorData.email;
+    }
+    if (doctorData.phone !== undefined && doctorData.phone !== null) {
+      userUpdateData.phone = doctorData.phone;
+    }
+    
+    // Only update user if there are fields to update
+    if (Object.keys(userUpdateData).length > 1) {
+      await updateDoc(userRef, userUpdateData);
+      console.log('updateDoctor: Updated user document');
+    }
     
     // Update doctor document
-    const doctorUpdateData = {
-      specialty: doctorData.specialty,
-      consultationDuration: parseInt(doctorData.slotDuration),
-      schedule: doctorData.schedule || 'Mon-Fri, 9:00 AM - 5:00 PM',
-      startTime: doctorData.startTime,
-      endTime: doctorData.endTime,
-      room: doctorData.room,
-      status: doctorData.status,
+    const doctorUpdateData: any = {
       updatedAt: Timestamp.now()
     };
+    
+    if (doctorData.specialty !== undefined) doctorUpdateData.specialty = doctorData.specialty;
+    if (doctorData.slotDuration !== undefined) {
+      doctorUpdateData.consultationDuration = parseInt(doctorData.slotDuration) || 20;
+    }
+    if (doctorData.schedule !== undefined) {
+      doctorUpdateData.schedule = doctorData.schedule;
+    } else if (doctorData.morningStartTime && doctorData.eveningEndTime) {
+      doctorUpdateData.schedule = `${doctorData.morningStartTime} - ${doctorData.eveningEndTime}`;
+    }
+    if (doctorData.startTime !== undefined) doctorUpdateData.startTime = doctorData.startTime;
+    if (doctorData.endTime !== undefined) doctorUpdateData.endTime = doctorData.endTime;
+    if (doctorData.morningStartTime !== undefined) doctorUpdateData.morningStartTime = doctorData.morningStartTime;
+    if (doctorData.morningEndTime !== undefined) doctorUpdateData.morningEndTime = doctorData.morningEndTime;
+    if (doctorData.eveningStartTime !== undefined) doctorUpdateData.eveningStartTime = doctorData.eveningStartTime;
+    if (doctorData.eveningEndTime !== undefined) doctorUpdateData.eveningEndTime = doctorData.eveningEndTime;
+    if (doctorData.room !== undefined) doctorUpdateData.room = doctorData.room;
+    if (doctorData.status !== undefined) doctorUpdateData.status = doctorData.status;
+    if (doctorData.assignedAssistants !== undefined) doctorUpdateData.assignedAssistants = doctorData.assignedAssistants;
     
     await updateDoc(doctorRef, doctorUpdateData);
     console.log('updateDoctor: Updated doctor document');

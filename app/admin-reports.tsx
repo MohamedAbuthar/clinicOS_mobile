@@ -1,14 +1,12 @@
 import { AdminSidebar } from '@/components/AdminSidebar';
 import AppointmentTrendsChart, { AppointmentData } from '@/components/charts/AppointmentTrendsChart';
-import DoctorPerformanceCard, { DoctorPerformanceCardProps } from '@/components/charts/DoctorPerformanceCard';
-import WaitTimeChart, { WaitTimeData } from '@/components/charts/WaitTimeChart';
 import { ThemedText } from '@/components/themed-text';
 import { getCurrentUser } from '@/lib/firebase/auth';
-import { getAllDoctors, getDocuments } from '@/lib/firebase/firestore';
+import { getDocument, getDocuments } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
-import { BarChart3, Calendar, Clock, TrendingUp, Users } from 'lucide-react-native';
+import { AlertCircle, Calendar, Clock, TrendingUp, Users } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 
@@ -24,24 +22,41 @@ const Menu = () => (
   </Svg>
 );
 
+type TimeRange = 'today' | 'thisWeek' | 'thisMonth';
+
 export default function AdminReports() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'appointments' | 'queue' | 'doctor'>('appointments');
-  const [timeRange, setTimeRange] = useState<'today' | 'thisWeek' | 'thisMonth'>('thisWeek');
+  const [timeRange, setTimeRange] = useState<TimeRange>('thisWeek');
   const [showTimeRangeDropdown, setShowTimeRangeDropdown] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
-  const [doctors, setDoctors] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [assistants, setAssistants] = useState<any[]>([]);
+  const [queueData, setQueueData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Load data
   useEffect(() => {
     const loadData = async () => {
       try {
+        setLoading(true);
+        setError(null);
         const currentUser = getCurrentUser();
         if (currentUser) {
-          setUser(currentUser);
+          // Load user profile from Firestore to get role
+          const userResult = await getDocument('users', currentUser.uid);
+          if (userResult.success && userResult.data) {
+            const userData = userResult.data as any;
+            setUser(userData);
+          } else {
+            // Fallback to Firebase user if Firestore data not found
+            setUser({
+              name: currentUser.displayName || 'Admin User',
+              email: currentUser.email || '',
+              role: 'admin'
+            });
+          }
           
           // Load appointments
           const appointmentsResult = await getDocuments('appointments');
@@ -49,17 +64,26 @@ export default function AdminReports() {
             setAppointments(appointmentsResult.data);
           }
           
-          // Load doctors with user data
-          const doctorsResult = await getAllDoctors();
-          if (doctorsResult.success && doctorsResult.data) {
-            setDoctors(doctorsResult.data);
+          // Load assistants (for assistant role filtering)
+          const assistantsResult = await getDocuments('assistants');
+          if (assistantsResult.success && assistantsResult.data) {
+            setAssistants(assistantsResult.data);
+          }
+          
+          // Load queue data for wait time stats
+          const queueResult = await getDocuments('queue');
+          if (queueResult.success && queueResult.data) {
+            setQueueData(queueResult.data);
           }
         } else {
           router.push('/auth-login');
         }
       } catch (error) {
         console.error('Error loading reports data:', error);
+        setError('Failed to load reports data');
         Alert.alert('Error', 'Failed to load reports data');
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -71,12 +95,28 @@ export default function AdminReports() {
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const closeSidebar = () => setSidebarOpen(false);
 
-  const handleDownload = () => {
-    Alert.alert('Download Report', 'This feature will be implemented soon');
+  // Filter data based on user role (matching web version)
+  const getFilteredAppointments = () => {
+    if (!user) return appointments;
+    
+    if (user.role === 'doctor') {
+      // Doctor sees only their own appointments
+      return appointments.filter(apt => apt.doctorId === user.id || apt.doctorId === user.uid);
+    } else if (user.role === 'assistant') {
+      // Assistant sees appointments for their assigned doctors
+      const assistant = assistants.find(a => a.userId === user.id || a.userId === user.uid);
+      if (assistant && assistant.assignedDoctors) {
+        return appointments.filter(apt => assistant.assignedDoctors.includes(apt.doctorId));
+      }
+      return []; // No assigned doctors
+    }
+    
+    // Admin sees all appointments
+    return appointments;
   };
 
   // Get date range based on time range selection
-  const getDateRange = (range: 'today' | 'thisWeek' | 'thisMonth') => {
+  const getDateRange = (range: TimeRange) => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
@@ -104,7 +144,7 @@ export default function AdminReports() {
   };
 
   // Filter appointments based on selected time range
-  const filterAppointmentsByDateRange = (appointments: any[], range: 'today' | 'thisWeek' | 'thisMonth') => {
+  const filterAppointmentsByDateRange = (appointments: any[], range: TimeRange) => {
     const { start, end } = getDateRange(range);
     return appointments.filter(appointment => {
       const appointmentDate = new Date(appointment.appointmentDate);
@@ -112,26 +152,49 @@ export default function AdminReports() {
     });
   };
 
-  // Get filtered appointments
-  const filteredAppointments = filterAppointmentsByDateRange(appointments, timeRange);
+  // Filter appointments based on selected time range and user role
+  const filteredAppointments = filterAppointmentsByDateRange(getFilteredAppointments(), timeRange);
 
-  // Calculate statistics based on filtered data
-  const getStats = () => {
-    const totalAppointments = filteredAppointments.length;
-    const completedAppointments = filteredAppointments.filter(apt => apt.status === 'completed').length;
-    const pendingAppointments = filteredAppointments.filter(apt => apt.status === 'scheduled' || apt.status === 'confirmed').length;
-    
-    return {
-      totalAppointments,
-      todayAppointments: timeRange === 'today' ? totalAppointments : 0,
-      completedAppointments,
-      pendingAppointments,
-      totalDoctors: doctors.length,
-      activeDoctors: doctors.filter(doc => doc.status === 'In').length,
-    };
+  // Calculate queue stats for average wait time
+  const calculateQueueStats = () => {
+    if (!queueData || queueData.length === 0) {
+      return { avgWaitTime: '0 min' };
+    }
+
+    const filteredQueue = queueData.filter((item: any) => {
+      if (!item.createdAt || !item.servedAt) return false;
+      const createdDate = item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt);
+      const { start, end } = getDateRange(timeRange);
+      return createdDate >= start && createdDate <= end;
+    });
+
+    if (filteredQueue.length === 0) {
+      return { avgWaitTime: '0 min' };
+    }
+
+    const waitTimes = filteredQueue
+      .map((item: any) => {
+        const created = item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt);
+        const served = item.servedAt.toDate ? item.servedAt.toDate() : new Date(item.servedAt);
+        return Math.max(0, Math.round((served.getTime() - created.getTime()) / (1000 * 60))); // minutes
+      })
+      .filter((time: number) => !isNaN(time) && time >= 0);
+
+    if (waitTimes.length === 0) {
+      return { avgWaitTime: '0 min' };
+    }
+
+    const avgWait = Math.round(waitTimes.reduce((a: number, b: number) => a + b, 0) / waitTimes.length);
+    return { avgWaitTime: `${avgWait} min` };
   };
 
-  const stats = getStats();
+  const queueStats = calculateQueueStats();
+
+  // Calculate statistics based on filtered data (matching web version)
+  const totalAppointments = filteredAppointments.length;
+  const completedAppointments = filteredAppointments.filter(apt => apt.status === 'completed').length;
+  const noShowAppointments = filteredAppointments.filter(apt => apt.status === 'no_show').length;
+  const noShowRate = totalAppointments > 0 ? ((noShowAppointments / totalAppointments) * 100).toFixed(1) : '0.0';
 
   const timeRangeOptions = [
     { value: 'today', label: 'Today' },
@@ -139,18 +202,22 @@ export default function AdminReports() {
     { value: 'thisMonth', label: 'This Month' },
   ];
 
-  const handleTimeRangeSelect = (range: 'today' | 'thisWeek' | 'thisMonth') => {
+  const handleTimeRangeSelect = (range: TimeRange) => {
     setTimeRange(range);
     setShowTimeRangeDropdown(false);
   };
 
-  // Generate appointment trends data based on time range
-  const generateAppointmentData = (): AppointmentData[] => {
+  const getTimeRangeLabel = () => {
+    return timeRangeOptions.find(opt => opt.value === timeRange)?.label || 'This Week';
+  };
+
+  // Generate appointment chart data based on time range (matching web version)
+  const generateAppointmentChartData = (): AppointmentData[] => {
     const { start, end } = getDateRange(timeRange);
     const data: AppointmentData[] = [];
     
     if (timeRange === 'today') {
-      // For today, show hourly data
+      // For today, show hourly data (9 AM to 5 PM)
       for (let hour = 9; hour <= 17; hour++) {
         const hourStart = new Date(start);
         hourStart.setHours(hour, 0, 0, 0);
@@ -158,8 +225,19 @@ export default function AdminReports() {
         hourEnd.setHours(hour + 1, 0, 0, 0);
         
         const hourAppointments = filteredAppointments.filter(apt => {
-          const aptTime = new Date(`${apt.appointmentDate} ${apt.appointmentTime}`);
-          return aptTime >= hourStart && aptTime < hourEnd;
+          const aptDate = new Date(apt.appointmentDate);
+          // Check if appointment date matches today
+          if (aptDate.toDateString() !== start.toDateString()) {
+            return false;
+          }
+          
+          // If appointmentTime exists, use it; otherwise use appointment date hour
+          if (apt.appointmentTime) {
+            const aptHour = parseInt(apt.appointmentTime.split(':')[0]);
+            return aptHour === hour;
+          }
+          
+          return aptDate.getHours() === hour;
         });
         
         data.push({
@@ -175,13 +253,22 @@ export default function AdminReports() {
       const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       
       while (current <= end) {
+        const dayStart = new Date(current);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(current);
+        dayEnd.setHours(23, 59, 59, 999);
+        
         const dayAppointments = filteredAppointments.filter(apt => {
           const aptDate = new Date(apt.appointmentDate);
-          return aptDate.toDateString() === current.toDateString();
+          return aptDate >= dayStart && aptDate <= dayEnd;
         });
         
+        const dayLabel = timeRange === 'thisMonth' 
+          ? `${current.getDate()}/${current.getMonth() + 1}` // Show day/month for month view
+          : days[current.getDay()]; // Show day name for week view
+        
         data.push({
-          day: days[current.getDay()],
+          day: dayLabel,
           total: dayAppointments.length,
           completed: dayAppointments.filter(apt => apt.status === 'completed').length,
           cancelled: dayAppointments.filter(apt => apt.status === 'cancelled').length,
@@ -194,82 +281,76 @@ export default function AdminReports() {
     return data;
   };
 
-  const appointmentData = generateAppointmentData();
+  const appointmentChartData = generateAppointmentChartData();
 
-  // Wait time data (mock data for now)
-  const waitTimeData: WaitTimeData[] = [
-    { hour: '9AM', avgWait: 5 },
-    { hour: '10AM', avgWait: 12 },
-    { hour: '11AM', avgWait: 18 },
-    { hour: '12PM', avgWait: 25 },
-    { hour: '2PM', avgWait: 14 },
-    { hour: '3PM', avgWait: 20 },
-    { hour: '4PM', avgWait: 22 },
-    { hour: '5PM', avgWait: 8 },
+  const StatCard = ({ title, value, icon: Icon, iconBgColor }: any) => {
+    const bgColorMap: { [key: string]: string } = {
+      'bg-cyan-50': '#ECFEFF',
+      'bg-yellow-50': '#FEFCE8',
+      'bg-green-50': '#F0FDF4',
+      'bg-red-50': '#FEF2F2',
+    };
+    const iconColorMap: { [key: string]: string } = {
+      'bg-cyan-50': '#06B6D4',
+      'bg-yellow-50': '#EAB308',
+      'bg-green-50': '#22C55E',
+      'bg-red-50': '#EF4444',
+    };
+    
+    const bgColor = bgColorMap[iconBgColor] || '#ECFEFF';
+    const iconColor = iconColorMap[iconBgColor] || '#06B6D4';
+    
+    return (
+      <View style={styles.statCard}>
+        <View style={[styles.statIcon, { backgroundColor: bgColor }]}>
+          <Icon size={20} color={iconColor} />
+        </View>
+        <View style={styles.statContent}>
+          <ThemedText style={styles.statValue}>{value}</ThemedText>
+          <ThemedText style={styles.statTitle}>{title}</ThemedText>
+        </View>
+      </View>
+    );
+  };
+
+  // Stats data matching web version
+  const statsData = [
+    {
+      title: 'Total Appointments',
+      value: totalAppointments.toString(),
+      icon: Calendar,
+      iconBgColor: 'bg-cyan-50',
+    },
+    {
+      title: 'Avg Wait Time',
+      value: queueStats?.avgWaitTime || '0 min',
+      icon: Clock,
+      iconBgColor: 'bg-yellow-50',
+    },
+    {
+      title: 'Patients Served',
+      value: completedAppointments.toString(),
+      icon: Users,
+      iconBgColor: 'bg-green-50',
+    },
+    {
+      title: 'No-Show Rate',
+      value: `${noShowRate}%`,
+      icon: TrendingUp,
+      iconBgColor: 'bg-red-50',
+    },
   ];
 
-  // Doctor performance data - match web version logic
-  const doctorPerformance: DoctorPerformanceCardProps[] = React.useMemo(() => {
-    console.log('Generating doctor performance, doctors:', doctors.length, 'appointments:', filteredAppointments.length);
-    
-    return doctors
-      .map(doctor => {
-        // Try to get doctor name from multiple possible fields
-        let doctorName = 'Unknown Doctor';
-        if (doctor.user?.name) {
-          doctorName = doctor.user.name;
-        } else if (doctor.name) {
-          doctorName = doctor.name;
-        } else if (doctor.fullName) {
-          doctorName = doctor.fullName;
-        } else if (doctor.firstName && doctor.lastName) {
-          doctorName = `${doctor.firstName} ${doctor.lastName}`;
-        } else if (doctor.id) {
-          doctorName = `Doctor ${doctor.id}`;
-        }
-        
-        const doctorAppointments = filteredAppointments.filter(apt => apt.doctorId === doctor.id || apt.doctorId === doctor.userId);
-        const completedAppointments = doctorAppointments.filter(apt => apt.status === 'completed');
-        
-        // Calculate completion rate for on-time rate
-        const totalAppointments = doctorAppointments.length;
-        const completionRate = totalAppointments > 0 
-          ? Math.round((completedAppointments.length / totalAppointments) * 100) 
-          : 94; // Default to 94% like web version
-        
-        return {
-          doctorName,
-          patientsServed: completedAppointments.length,
-          avgConsultTime: `${doctor.consultationDuration || 30} min`,
-          onTimeRate: `${completionRate}%`,
-        };
-      })
-      .filter(doctor => doctor.doctorName && doctor.doctorName !== 'Unknown Doctor');
-  }, [doctors, filteredAppointments]);
-
-  const StatCard = ({ title, value, icon: Icon, color }: any) => (
-    <View style={styles.statCard}>
-      <View style={[styles.statIcon, { backgroundColor: color }]}>
-        <Icon size={20} color="#FFFFFF" />
-      </View>
-      <View style={styles.statContent}>
-        <ThemedText style={styles.statValue}>{value}</ThemedText>
-        <ThemedText style={styles.statTitle}>{title}</ThemedText>
-      </View>
-    </View>
-  );
-
-  const TabButton = ({ tab, label, icon: Icon }: any) => (
-    <TouchableOpacity
-      style={[styles.tabButton, activeTab === tab && styles.activeTab]}
-      onPress={() => setActiveTab(tab)}
-    >
-      <Icon size={16} color={activeTab === tab ? '#FFFFFF' : '#6B7280'} />
-      <ThemedText style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-        {label}
-      </ThemedText>
-    </TouchableOpacity>
-  );
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#14B8A6" />
+          <ThemedText style={styles.loadingText}>Loading reports...</ThemedText>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -279,19 +360,45 @@ export default function AdminReports() {
           <TouchableOpacity style={styles.menuButton} onPress={toggleSidebar}>
             <Menu />
           </TouchableOpacity>
-          <View>
-            <ThemedText style={styles.title}>Reports</ThemedText>
-            <ThemedText style={styles.subtitle}>View clinic analytics and reports</ThemedText>
+          <View style={styles.headerTextContainer}>
+            <ThemedText style={styles.title}>
+              {user?.role === 'doctor' 
+                ? 'Your Reports' 
+                : user?.role === 'assistant'
+                ? 'Assigned Doctors Reports'
+                : 'Reports'
+              }
+            </ThemedText>
+            <ThemedText style={styles.subtitle}>
+              {user?.role === 'doctor' 
+                ? 'Analytics and insights for your practice' 
+                : user?.role === 'assistant'
+                ? 'Analytics and insights for your assigned doctors'
+                : 'Analytics and insights for clinic operations'
+              }
+            </ThemedText>
+            {/* User context indicator */}
+            {user && (
+              <View style={styles.roleBadge}>
+                <ThemedText style={styles.roleBadgeText}>
+                  {user.role === 'doctor' && '👨‍⚕️ Doctor View'}
+                  {user.role === 'assistant' && '👩‍💼 Assistant View'}
+                  {user.role === 'admin' && '👨‍💼 Admin View'}
+                </ThemedText>
+              </View>
+            )}
           </View>
         </View>
-        {/* <TouchableOpacity 
-          style={styles.downloadButton}
-          onPress={handleDownload}
-          disabled={loading}
+        {/* Time Range Selector in Header */}
+        <TouchableOpacity 
+          style={styles.headerTimeRangeButton}
+          onPress={() => setShowTimeRangeDropdown(true)}
         >
-          <Download size={16} color="#FFFFFF" />
-          <ThemedText style={styles.downloadButtonText}>Download</ThemedText>
-        </TouchableOpacity> */}
+          <ThemedText style={styles.headerTimeRangeText}>
+            {getTimeRangeLabel()}
+          </ThemedText>
+          <ThemedText style={styles.headerTimeRangeArrow}>▼</ThemedText>
+        </TouchableOpacity>
       </View>
 
       {/* Sidebar */}
@@ -301,124 +408,32 @@ export default function AdminReports() {
         currentPath="/admin-reports"
         onNavigate={handleNavigate}
         onLogout={handleLogout}
-        userName="Admin User"
-        userRole="Administrator"
+        userName={user?.name || 'Admin User'}
+        userRole={user?.role || 'Administrator'}
       />
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          {/* Time Range Selector */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Calendar size={20} color="#059669" />
-              <ThemedText style={styles.sectionTitle}>Time Range</ThemedText>
+          {/* Error Message */}
+          {error && (
+            <View style={styles.errorContainer}>
+              <AlertCircle size={20} color="#DC2626" />
+              <ThemedText style={styles.errorText}>{error}</ThemedText>
             </View>
-            <TouchableOpacity 
-              style={styles.pickerContainer}
-              onPress={() => setShowTimeRangeDropdown(true)}
-            >
-              <ThemedText style={styles.pickerText}>
-                {timeRangeOptions.find(opt => opt.value === timeRange)?.label}
-              </ThemedText>
-              <ThemedText style={styles.pickerArrow}>▼</ThemedText>
-            </TouchableOpacity>
-          </View>
-
+          )}
 
           {/* Statistics Cards */}
           <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <BarChart3 size={20} color="#059669" />
-              <ThemedText style={styles.sectionTitle}>Overview Statistics</ThemedText>
-            </View>
             <View style={styles.statsGrid}>
-              <StatCard
-                title="Total Appointments"
-                value={stats.totalAppointments}
-                icon={Calendar}
-                color="#3B82F6"
-              />
-              <StatCard
-                title="Today's Appointments"
-                value={stats.todayAppointments}
-                icon={Clock}
-                color="#10B981"
-              />
-              <StatCard
-                title="Completed"
-                value={stats.completedAppointments}
-                icon={TrendingUp}
-                color="#059669"
-              />
-              <StatCard
-                title="Pending"
-                value={stats.pendingAppointments}
-                icon={Users}
-                color="#F59E0B"
-              />
-              <StatCard
-                title="Total Doctors"
-                value={stats.totalDoctors}
-                icon={Users}
-                color="#8B5CF6"
-              />
-              <StatCard
-                title="Active Doctors"
-                value={stats.activeDoctors}
-                icon={TrendingUp}
-                color="#EF4444"
-              />
+              {statsData.map((stat, index) => (
+                <StatCard key={index} {...stat} />
+              ))}
             </View>
           </View>
 
-          {/* Tabs */}
+          {/* Appointment Trends Chart */}
           <View style={styles.section}>
-            <View style={styles.tabsContainer}>
-              <TabButton tab="appointments" label="Appointments" icon={Calendar} />
-              <TabButton tab="queue" label="Queue" icon={Users} />
-              <TabButton tab="doctor" label="Doctors" icon={TrendingUp} />
-            </View>
-          </View>
-
-          {/* Tab Content */}
-          <View style={styles.section}>
-            {activeTab === 'appointments' && (
-              <AppointmentTrendsChart data={appointmentData} />
-            )}
-
-            {activeTab === 'queue' && (
-              <WaitTimeChart data={waitTimeData} />
-            )}
-
-            {activeTab === 'doctor' && (
-              <View>
-                {doctorPerformance.length > 0 ? (
-                  <>
-                    <View style={styles.sectionHeader}>
-                      <TrendingUp size={20} color="#059669" />
-                      <ThemedText style={styles.sectionTitle}>Doctor Performance</ThemedText>
-                    </View>
-                    <View style={styles.doctorCardsContainer}>
-                      {doctorPerformance.map((doctor, index) => (
-                        <DoctorPerformanceCard key={`doctor-${index}`} {...doctor} />
-                      ))}
-                    </View>
-                  </>
-                ) : (
-                  <View style={styles.emptyState}>
-                    <Users size={48} color="#6B7280" />
-                    <ThemedText style={styles.emptyStateText}>
-                      No doctor performance data available for this period
-                    </ThemedText>
-                    {doctors.length > 0 && (
-                      <ThemedText style={[styles.emptyStateText, { fontSize: 12, marginTop: 8 }]}>
-                        Total doctors in system: {doctors.length}
-                      </ThemedText>
-                    )}
-                  </View>
-                )}
-              </View>
-            )}
+            <AppointmentTrendsChart data={appointmentChartData} />
           </View>
         </View>
       </ScrollView>
@@ -435,7 +450,10 @@ export default function AdminReports() {
           activeOpacity={1}
           onPress={() => setShowTimeRangeDropdown(false)}
         >
-          <View style={styles.modalContent}>
+          <View 
+            style={styles.modalContent}
+            onStartShouldSetResponder={() => true}
+          >
             <View style={styles.modalHeader}>
               <ThemedText style={styles.modalTitle}>Select Time Range</ThemedText>
             </View>
@@ -446,7 +464,7 @@ export default function AdminReports() {
                   styles.modalOption,
                   timeRange === option.value && styles.modalOptionSelected
                 ]}
-                onPress={() => handleTimeRangeSelect(option.value as any)}
+                onPress={() => handleTimeRangeSelect(option.value as TimeRange)}
               >
                 <ThemedText style={[
                   styles.modalOptionText,
@@ -471,6 +489,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#6B7280',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -491,6 +520,9 @@ const styles = StyleSheet.create({
     padding: 8,
     marginRight: 12,
   },
+  headerTextContainer: {
+    flex: 1,
+  },
   title: {
     fontSize: 20,
     fontWeight: '700',
@@ -500,27 +532,63 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 12,
     color: '#6B7280',
-  },
-  downloadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#14B8A6',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    gap: 4,
     marginTop: 4,
   },
-  downloadButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+  roleBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#CCFBF1',
+  },
+  roleBadgeText: {
+    fontSize: 11,
     fontWeight: '500',
+    color: '#065F46',
+  },
+  headerTimeRangeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minWidth: 120,
+    marginTop: 4,
+  },
+  headerTimeRangeText: {
+    fontSize: 14,
+    color: '#1F2937',
+    marginRight: 6,
+  },
+  headerTimeRangeArrow: {
+    fontSize: 10,
+    color: '#6B7280',
   },
   scrollView: {
     flex: 1,
   },
   content: {
     padding: 20,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+    gap: 8,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#991B1B',
   },
   section: {
     backgroundColor: '#FFFFFF',
@@ -532,38 +600,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  pickerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    height: 50,
-  },
-  pickerText: {
-    fontSize: 16,
-    color: '#1F2937',
-    flex: 1,
-  },
-  pickerArrow: {
-    fontSize: 12,
-    color: '#6B7280',
   },
   statsGrid: {
     flexDirection: 'row',
@@ -601,55 +637,6 @@ const styles = StyleSheet.create({
   statTitle: {
     fontSize: 12,
     color: '#6B7280',
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    padding: 4,
-  },
-  tabButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    gap: 6,
-  },
-  activeTab: {
-    backgroundColor: '#059669',
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#6B7280',
-  },
-  activeTabText: {
-    color: '#FFFFFF',
-  },
-  chartPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderStyle: 'dashed',
-  },
-  chartTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  chartSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
@@ -704,25 +691,5 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#059669',
     fontWeight: '600',
-  },
-  doctorCardsContainer: {
-    gap: 12,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderStyle: 'dashed',
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginTop: 16,
-    textAlign: 'center',
   },
 });

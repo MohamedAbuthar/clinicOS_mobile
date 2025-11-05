@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Dimensions, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 import { Path, Svg } from 'react-native-svg';
 import { ThemedText } from './themed-text';
 
@@ -152,6 +152,12 @@ interface Doctor {
     waiting: number;
   };
   assistants: string;
+  startTime?: string;
+  endTime?: string;
+  morningStartTime?: string;
+  morningEndTime?: string;
+  eveningStartTime?: string;
+  eveningEndTime?: string;
 }
 
 interface EditDoctorDialogProps {
@@ -170,15 +176,21 @@ export function EditDoctorDialog({ isOpen, onClose, doctor, onSubmit, isLoading 
     email: '',
     startTime: '09:00',
     endTime: '17:00',
+    morningStartTime: '09:00',
+    morningEndTime: '12:00',
+    eveningStartTime: '17:00',
+    eveningEndTime: '20:00',
     room: '',
     slotDuration: '20',
     status: 'In'
   });
+  const [showSpecialtyPicker, setShowSpecialtyPicker] = useState(false);
   const [showSlotDurationPicker, setShowSlotDurationPicker] = useState(false);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
   
   // Refs for scrolling
   const scrollViewRef = useRef<ScrollView>(null);
+  const specialtyRef = useRef<View>(null);
   const slotDurationRef = useRef<View>(null);
   const statusRef = useRef<View>(null);
 
@@ -186,21 +198,30 @@ export function EditDoctorDialog({ isOpen, onClose, doctor, onSubmit, isLoading 
   useEffect(() => {
     if (doctor) {
       setFormData({
-        name: doctor.name,
-        specialty: doctor.specialty,
-        phone: doctor.phone,
-        email: doctor.email,
-        startTime: '09:00', // Default values since these aren't in the doctor object
-        endTime: '17:00',
-        room: doctor.room,
-        slotDuration: doctor.consultationDuration.toString(),
-        status: doctor.status
+        name: doctor.name || '',
+        specialty: doctor.specialty || '',
+        phone: doctor.phone || '',
+        email: doctor.email || '',
+        startTime: doctor.startTime || '09:00',
+        endTime: doctor.endTime || '17:00',
+        morningStartTime: doctor.morningStartTime || '09:00',
+        morningEndTime: doctor.morningEndTime || '12:00',
+        eveningStartTime: doctor.eveningStartTime || '17:00',
+        eveningEndTime: doctor.eveningEndTime || '20:00',
+        room: doctor.room || '',
+        slotDuration: doctor.consultationDuration ? doctor.consultationDuration.toString() : '20',
+        status: doctor.status || 'In'
       });
     }
-  }, [doctor]);
+  }, [doctor, isOpen]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSpecialtySelect = (value: string) => {
+    setFormData(prev => ({ ...prev, specialty: value }));
+    setShowSpecialtyPicker(false);
   };
 
   const handleSlotDurationSelect = (value: string) => {
@@ -213,52 +234,30 @@ export function EditDoctorDialog({ isOpen, onClose, doctor, onSubmit, isLoading 
     setShowStatusPicker(false);
   };
 
+  const handleSpecialtyToggle = () => {
+    setShowSpecialtyPicker(!showSpecialtyPicker);
+    setShowSlotDurationPicker(false);
+    setShowStatusPicker(false);
+  };
+
   const handleSlotDurationToggle = () => {
     setShowSlotDurationPicker(!showSlotDurationPicker);
-    if (!showSlotDurationPicker) {
-      // Scroll to slot duration field when opening
-      setTimeout(() => {
-        slotDurationRef.current?.measureInWindow((x, y, width, height) => {
-          const screenHeight = Dimensions.get('window').height;
-          const dropdownHeight = 250; // Approximate dropdown height
-          const availableSpace = screenHeight - y - height;
-          
-          if (availableSpace < dropdownHeight) {
-            // Scroll up to make room for dropdown
-            scrollViewRef.current?.scrollTo({
-              y: Math.max(0, y - dropdownHeight - 50),
-              animated: true
-            });
-          }
-        });
-      }, 150);
-    }
+    setShowSpecialtyPicker(false);
+    setShowStatusPicker(false);
   };
 
   const handleStatusToggle = () => {
     setShowStatusPicker(!showStatusPicker);
-    if (!showStatusPicker) {
-      // Scroll to status field when opening
-      setTimeout(() => {
-        statusRef.current?.measureInWindow((x, y, width, height) => {
-          const screenHeight = Dimensions.get('window').height;
-          const dropdownHeight = 200; // Approximate dropdown height
-          const availableSpace = screenHeight - y - height;
-          
-          if (availableSpace < dropdownHeight) {
-            // Scroll up to make room for dropdown
-            scrollViewRef.current?.scrollTo({
-              y: Math.max(0, y - dropdownHeight - 50),
-              animated: true
-            });
-          }
-        });
-      }, 150);
-    }
+    setShowSpecialtyPicker(false);
+    setShowSlotDurationPicker(false);
   };
 
   const handleSubmit = () => {
     if (!formData.name || !formData.specialty || !formData.phone || !formData.email) {
+      return;
+    }
+    // Validate morning and evening session times
+    if (!formData.morningStartTime || !formData.morningEndTime || !formData.eveningStartTime || !formData.eveningEndTime) {
       return;
     }
     onSubmit(formData);
@@ -267,17 +266,22 @@ export function EditDoctorDialog({ isOpen, onClose, doctor, onSubmit, isLoading 
   const resetForm = () => {
     if (doctor) {
       setFormData({
-        name: doctor.name,
-        specialty: doctor.specialty,
-        phone: doctor.phone,
-        email: doctor.email,
-        startTime: '09:00',
-        endTime: '17:00',
-        room: doctor.room,
-        slotDuration: doctor.consultationDuration.toString(),
-        status: doctor.status
+        name: doctor.name || '',
+        specialty: doctor.specialty || '',
+        phone: doctor.phone || '',
+        email: doctor.email || '',
+        startTime: doctor.startTime || '09:00',
+        endTime: doctor.endTime || '17:00',
+        morningStartTime: doctor.morningStartTime || '09:00',
+        morningEndTime: doctor.morningEndTime || '12:00',
+        eveningStartTime: doctor.eveningStartTime || '17:00',
+        eveningEndTime: doctor.eveningEndTime || '20:00',
+        room: doctor.room || '',
+        slotDuration: doctor.consultationDuration ? doctor.consultationDuration.toString() : '20',
+        status: doctor.status || 'In'
       });
     }
+    setShowSpecialtyPicker(false);
     setShowSlotDurationPicker(false);
     setShowStatusPicker(false);
   };
@@ -300,8 +304,9 @@ export function EditDoctorDialog({ isOpen, onClose, doctor, onSubmit, isLoading 
     <Modal
       visible={isOpen}
       transparent={true}
-      animationType="fade"
+      animationType="slide"
       onRequestClose={handleClose}
+      presentationStyle="overFullScreen"
     >
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} onPress={handleClose} />
@@ -317,7 +322,15 @@ export function EditDoctorDialog({ isOpen, onClose, doctor, onSubmit, isLoading 
             </TouchableOpacity>
           </View>
 
-          <ScrollView ref={scrollViewRef} style={styles.content} showsVerticalScrollIndicator={false}>
+          <ScrollView 
+            ref={scrollViewRef} 
+            style={styles.content}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled={true}
+            bounces={false}
+          >
             <View style={styles.form}>
               {/* Name */}
               <View style={styles.inputGroup}>
@@ -336,15 +349,108 @@ export function EditDoctorDialog({ isOpen, onClose, doctor, onSubmit, isLoading 
               {/* Specialty */}
               <View style={styles.inputGroup}>
                 <ThemedText style={styles.label}>
-                  Specialization <ThemedText style={styles.required}>*</ThemedText>
+                  Specialty <ThemedText style={styles.required}>*</ThemedText>
                 </ThemedText>
-                <TextInput
-                  style={styles.input}
-                  value={formData.specialty}
-                  onChangeText={(value) => handleInputChange('specialty', value)}
-                  placeholder="General Physician, Cardiologist, etc."
-                  placeholderTextColor="#9CA3AF"
-                />
+                <View ref={specialtyRef} style={styles.specialtyWrapper}>
+                  <View style={styles.selectContainer}>
+                    <TouchableOpacity 
+                      style={styles.select}
+                      onPress={handleSpecialtyToggle}
+                    >
+                      <ThemedText style={[styles.selectText, !formData.specialty && styles.placeholderText]}>
+                        {formData.specialty || 'Select Specialty'}
+                      </ThemedText>
+                      <ChevronDown />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {/* Specialty Dropdown */}
+                  {showSpecialtyPicker && (
+                    <View style={[styles.dropdown, styles.specialtyDropdown]}>
+                      <ScrollView 
+                        style={styles.dropdownList}
+                        showsVerticalScrollIndicator={true}
+                        nestedScrollEnabled={true}
+                        scrollEnabled={true}
+                        keyboardShouldPersistTaps="handled"
+                        bounces={true}
+                      >
+                        <TouchableOpacity
+                          style={[styles.dropdownItem, formData.specialty === '' && styles.dropdownItemSelected]}
+                          onPress={() => handleSpecialtySelect('')}
+                        >
+                          <ThemedText style={[styles.dropdownItemText, formData.specialty === '' && styles.dropdownItemTextSelected]}>
+                            Select Specialty
+                          </ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.dropdownItem, formData.specialty === 'Cardiology' && styles.dropdownItemSelected]}
+                          onPress={() => handleSpecialtySelect('Cardiology')}
+                        >
+                          <ThemedText style={[styles.dropdownItemText, formData.specialty === 'Cardiology' && styles.dropdownItemTextSelected]}>
+                            Cardiology
+                          </ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.dropdownItem, formData.specialty === 'Dermatology' && styles.dropdownItemSelected]}
+                          onPress={() => handleSpecialtySelect('Dermatology')}
+                        >
+                          <ThemedText style={[styles.dropdownItemText, formData.specialty === 'Dermatology' && styles.dropdownItemTextSelected]}>
+                            Dermatology
+                          </ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.dropdownItem, formData.specialty === 'Orthopedics' && styles.dropdownItemSelected]}
+                          onPress={() => handleSpecialtySelect('Orthopedics')}
+                        >
+                          <ThemedText style={[styles.dropdownItemText, formData.specialty === 'Orthopedics' && styles.dropdownItemTextSelected]}>
+                            Orthopedics
+                          </ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.dropdownItem, formData.specialty === 'Pediatrics' && styles.dropdownItemSelected]}
+                          onPress={() => handleSpecialtySelect('Pediatrics')}
+                        >
+                          <ThemedText style={[styles.dropdownItemText, formData.specialty === 'Pediatrics' && styles.dropdownItemTextSelected]}>
+                            Pediatrics
+                          </ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.dropdownItem, formData.specialty === 'General Medicine' && styles.dropdownItemSelected]}
+                          onPress={() => handleSpecialtySelect('General Medicine')}
+                        >
+                          <ThemedText style={[styles.dropdownItemText, formData.specialty === 'General Medicine' && styles.dropdownItemTextSelected]}>
+                            General Medicine
+                          </ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.dropdownItem, formData.specialty === 'ENT' && styles.dropdownItemSelected]}
+                          onPress={() => handleSpecialtySelect('ENT')}
+                        >
+                          <ThemedText style={[styles.dropdownItemText, formData.specialty === 'ENT' && styles.dropdownItemTextSelected]}>
+                            ENT
+                          </ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.dropdownItem, formData.specialty === 'Gynecology' && styles.dropdownItemSelected]}
+                          onPress={() => handleSpecialtySelect('Gynecology')}
+                        >
+                          <ThemedText style={[styles.dropdownItemText, formData.specialty === 'Gynecology' && styles.dropdownItemTextSelected]}>
+                            Gynecology
+                          </ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.dropdownItem, styles.dropdownItemLast, formData.specialty === 'Neurology' && styles.dropdownItemSelected]}
+                          onPress={() => handleSpecialtySelect('Neurology')}
+                        >
+                          <ThemedText style={[styles.dropdownItemText, formData.specialty === 'Neurology' && styles.dropdownItemTextSelected]}>
+                            Neurology
+                          </ThemedText>
+                        </TouchableOpacity>
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
               </View>
 
               {/* Contact Info */}
@@ -378,31 +484,69 @@ export function EditDoctorDialog({ isOpen, onClose, doctor, onSubmit, isLoading 
                 </View>
               </View>
 
-              {/* Schedule Times */}
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, styles.halfWidth]}>
-                  <ThemedText style={styles.label}>
-                    <Clock /> Start Time <ThemedText style={styles.required}>*</ThemedText>
-                  </ThemedText>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.startTime}
-                    onChangeText={(value) => handleInputChange('startTime', value)}
-                    placeholder="09:00"
-                    placeholderTextColor="#9CA3AF"
-                  />
+              {/* Morning Session */}
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.sectionLabel}>
+                  <Clock /> Morning Session
+                </ThemedText>
+                <View style={styles.row}>
+                  <View style={[styles.inputGroup, styles.halfWidth]}>
+                    <ThemedText style={styles.label}>
+                      Start Time <ThemedText style={styles.required}>*</ThemedText>
+                    </ThemedText>
+                    <TextInput
+                      style={styles.input}
+                      value={formData.morningStartTime}
+                      onChangeText={(value) => handleInputChange('morningStartTime', value)}
+                      placeholder="09:00"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                  <View style={[styles.inputGroup, styles.halfWidth]}>
+                    <ThemedText style={styles.label}>
+                      End Time <ThemedText style={styles.required}>*</ThemedText>
+                    </ThemedText>
+                    <TextInput
+                      style={styles.input}
+                      value={formData.morningEndTime}
+                      onChangeText={(value) => handleInputChange('morningEndTime', value)}
+                      placeholder="12:00"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
                 </View>
-                <View style={[styles.inputGroup, styles.halfWidth]}>
-                  <ThemedText style={styles.label}>
-                    <Clock /> End Time <ThemedText style={styles.required}>*</ThemedText>
-                  </ThemedText>
-                  <TextInput
-                    style={styles.input}
-                    value={formData.endTime}
-                    onChangeText={(value) => handleInputChange('endTime', value)}
-                    placeholder="17:00"
-                    placeholderTextColor="#9CA3AF"
-                  />
+              </View>
+
+              {/* Evening Session */}
+              <View style={styles.inputGroup}>
+                <ThemedText style={styles.sectionLabel}>
+                  <Clock /> Evening Session
+                </ThemedText>
+                <View style={styles.row}>
+                  <View style={[styles.inputGroup, styles.halfWidth]}>
+                    <ThemedText style={styles.label}>
+                      Start Time <ThemedText style={styles.required}>*</ThemedText>
+                    </ThemedText>
+                    <TextInput
+                      style={styles.input}
+                      value={formData.eveningStartTime}
+                      onChangeText={(value) => handleInputChange('eveningStartTime', value)}
+                      placeholder="17:00"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                  <View style={[styles.inputGroup, styles.halfWidth]}>
+                    <ThemedText style={styles.label}>
+                      End Time <ThemedText style={styles.required}>*</ThemedText>
+                    </ThemedText>
+                    <TextInput
+                      style={styles.input}
+                      value={formData.eveningEndTime}
+                      onChangeText={(value) => handleInputChange('eveningEndTime', value)}
+                      placeholder="20:00"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
                 </View>
               </View>
 
@@ -445,6 +589,9 @@ export function EditDoctorDialog({ isOpen, onClose, doctor, onSubmit, isLoading 
                         style={styles.dropdownList}
                         showsVerticalScrollIndicator={true}
                         nestedScrollEnabled={true}
+                        scrollEnabled={true}
+                        keyboardShouldPersistTaps="handled"
+                        bounces={true}
                       >
                         <TouchableOpacity
                           style={[styles.dropdownItem, formData.slotDuration === '10' && styles.dropdownItemSelected]}
@@ -524,7 +671,9 @@ export function EditDoctorDialog({ isOpen, onClose, doctor, onSubmit, isLoading 
                         style={styles.statusDropdownList}
                         showsVerticalScrollIndicator={true}
                         nestedScrollEnabled={true}
-                        bounces={false}
+                        scrollEnabled={true}
+                        keyboardShouldPersistTaps="handled"
+                        bounces={true}
                       >
                         <TouchableOpacity
                           style={[styles.dropdownItem, formData.status === 'In' && styles.dropdownItemSelected]}
@@ -564,9 +713,9 @@ export function EditDoctorDialog({ isOpen, onClose, doctor, onSubmit, isLoading 
               <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity 
-              style={[styles.submitButton, (!formData.name || !formData.specialty || !formData.phone || !formData.email || isLoading) && styles.submitButtonDisabled]} 
+              style={[styles.submitButton, (!formData.name || !formData.specialty || !formData.phone || !formData.email || !formData.morningStartTime || !formData.morningEndTime || !formData.eveningStartTime || !formData.eveningEndTime || isLoading) && styles.submitButtonDisabled]} 
               onPress={handleSubmit}
-              disabled={!formData.name || !formData.specialty || !formData.phone || !formData.email || isLoading}
+              disabled={!formData.name || !formData.specialty || !formData.phone || !formData.email || !formData.morningStartTime || !formData.morningEndTime || !formData.eveningStartTime || !formData.eveningEndTime || isLoading}
             >
               <Save />
               <ThemedText style={styles.submitButtonText}>
@@ -587,7 +736,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    overflow: 'visible',
   },
   backdrop: {
     position: 'absolute',
@@ -598,14 +746,15 @@ const styles = StyleSheet.create({
   },
   dialog: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 12,
     width: '100%',
     maxHeight: '90%',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
-    shadowRadius: 16,
+    shadowRadius: 8,
     elevation: 8,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
@@ -631,11 +780,17 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
   },
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: 20,
+  },
   form: {
     gap: 16,
+    paddingBottom: 30,
   },
   inputGroup: {
-    gap: 6,
+    gap: 8,
+    marginBottom: 8,
   },
   row: {
     flexDirection: 'row',
@@ -660,37 +815,55 @@ const styles = StyleSheet.create({
     borderColor: '#D1D5DB',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     fontSize: 14,
     color: '#111827',
     backgroundColor: '#FFFFFF',
+    minHeight: 44,
+    textAlignVertical: 'center',
+  },
+  specialtyWrapper: {
+    position: 'relative',
+    zIndex: 3,
   },
   slotDurationWrapper: {
     position: 'relative',
-    zIndex: 10,
-    elevation: 5,
+    zIndex: 5,
   },
   statusWrapper: {
     position: 'relative',
-    zIndex: 5,
-    elevation: 3,
+    zIndex: 10,
   },
   selectContainer: {
     borderWidth: 1,
     borderColor: '#D1D5DB',
     borderRadius: 8,
     backgroundColor: '#FFFFFF',
+    minHeight: 44,
   },
   select: {
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    minHeight: 44,
   },
   selectText: {
     fontSize: 14,
     color: '#111827',
+  },
+  placeholderText: {
+    color: '#9CA3AF',
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 12,
   },
   actions: {
     flexDirection: 'row',
@@ -732,46 +905,49 @@ const styles = StyleSheet.create({
   },
   dropdown: {
     position: 'absolute',
-    top: '100%',
+    bottom: '100%',
     left: 0,
     right: 0,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#D1D5DB',
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    elevation: 15,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    elevation: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    maxHeight: 300,
-    zIndex: 9999,
-    marginTop: 2,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    maxHeight: 200,
+    zIndex: 1000,
+    marginBottom: 1,
+  },
+  specialtyDropdown: {
+    zIndex: 999,
+    maxHeight: 250,
   },
   slotDurationDropdown: {
     zIndex: 1000,
-    maxHeight: 250,
+    maxHeight: 180,
   },
   statusDropdown: {
-    zIndex: 500,
-    maxHeight: 200,
+    zIndex: 1001,
+    maxHeight: 180,
   },
   dropdownList: {
-    maxHeight: 200,
-    flexGrow: 0,
+    maxHeight: 150,
   },
   statusDropdownList: {
     maxHeight: 150,
-    flexGrow: 0,
   },
   dropdownItem: {
     paddingHorizontal: 12,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
-    minHeight: 48,
+    minHeight: 50,
+    justifyContent: 'center',
   },
   dropdownItemLast: {
     borderBottomWidth: 0,

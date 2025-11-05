@@ -138,6 +138,12 @@ interface Doctor {
     waiting: number;
   };
   assistants: string;
+  assignedAssistantNames?: string[];
+  assignedAssistants?: string[];
+  morningStartTime?: string;
+  morningEndTime?: string;
+  eveningStartTime?: string;
+  eveningEndTime?: string;
 }
 
 interface ViewDoctorDialogProps {
@@ -248,17 +254,39 @@ export function ViewDoctorDialog({ isOpen, onClose, doctor, onEdit, onDelete }: 
             <View style={styles.section}>
               <ThemedText style={styles.sectionTitle}>Schedule Information</ThemedText>
               <View style={styles.infoList}>
-                <View style={styles.infoItem}>
-                  <Clock />
-                  <ThemedText style={styles.infoText}>{doctor.schedule}</ThemedText>
-                </View>
+                {doctor.morningStartTime && doctor.morningEndTime && (
+                  <View style={styles.infoItem}>
+                    <Clock />
+                    <ThemedText style={styles.infoText}>
+                      Morning Session: {doctor.morningStartTime} - {doctor.morningEndTime}
+                    </ThemedText>
+                  </View>
+                )}
+                {doctor.eveningStartTime && doctor.eveningEndTime && (
+                  <View style={styles.infoItem}>
+                    <Clock />
+                    <ThemedText style={styles.infoText}>
+                      Evening Session: {doctor.eveningStartTime} - {doctor.eveningEndTime}
+                    </ThemedText>
+                  </View>
+                )}
+                {(!doctor.morningStartTime || !doctor.eveningStartTime) && (
+                  <View style={styles.infoItem}>
+                    <Clock />
+                    <ThemedText style={styles.infoText}>{doctor.schedule}</ThemedText>
+                  </View>
+                )}
                 <View style={styles.infoItem}>
                   <Activity />
                   <ThemedText style={styles.infoText}>{doctor.consultationDuration} min slots</ThemedText>
                 </View>
                 <View style={styles.infoItem}>
                   <Users />
-                  <ThemedText style={styles.infoText}>{doctor.assistants}</ThemedText>
+                  <ThemedText style={styles.infoText}>
+                    {doctor.assignedAssistantNames && doctor.assignedAssistantNames.length > 0 
+                      ? doctor.assignedAssistantNames.join(', ')
+                      : (doctor.assistants || 'No assistants assigned')}
+                  </ThemedText>
                 </View>
               </View>
             </View>

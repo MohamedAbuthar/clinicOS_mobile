@@ -61,6 +61,7 @@ const ChevronDown = () => (
 );
 
 interface OverrideData {
+  id: string;
   title: string;
   date: string;
   session: 'morning' | 'evening' | 'both';
@@ -68,15 +69,34 @@ interface OverrideData {
   description?: string;
 }
 
-interface AddOverrideDialogProps {
+interface EditOverrideDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (data: OverrideData) => void;
+  initialData?: OverrideData | null;
   isLoading?: boolean;
 }
 
-export function AddOverrideDialog({ isOpen, onClose, onSave, isLoading = false }: AddOverrideDialogProps) {
+// Helper function to convert startTime/endTime to session
+const timeRangeToSession = (startTime?: string, endTime?: string): 'morning' | 'evening' | 'both' => {
+  if (!startTime || !endTime) {
+    return 'both';
+  }
+  
+  const [hours] = startTime.split(':').map(Number);
+  
+  // Morning session typically starts before 13:00 (1 PM)
+  // Evening session typically starts at or after 13:00 (1 PM)
+  if (hours < 13) {
+    return 'morning';
+  } else {
+    return 'evening';
+  }
+};
+
+export function EditOverrideDialog({ isOpen, onClose, onSave, initialData, isLoading = false }: EditOverrideDialogProps) {
   const [formData, setFormData] = useState<OverrideData>({
+    id: '',
     title: '',
     date: '',
     session: 'both',
@@ -89,18 +109,42 @@ export function AddOverrideDialog({ isOpen, onClose, onSave, isLoading = false }
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
 
-  // Initialize with current date when dialog opens
+  // Initialize form data when initialData changes
   useEffect(() => {
-    if (isOpen) {
-      const today = new Date();
-      const formattedDate = today.toISOString().split('T')[0]; // YYYY-MM-DD format
-      setFormData(prev => ({
-        ...prev,
-        date: formattedDate,
-        session: 'both',
-      }));
+    if (initialData && isOpen) {
+      // Use the session directly from initialData (it's already computed in parent)
+      const session = initialData.session || 'both';
+      
+      // Use the type directly from initialData (it's already mapped in parent)
+      const type = initialData.type || 'special-event';
+      
+      const dateValue = initialData.date || '';
+      if (dateValue) {
+        try {
+          const dateObj = new Date(dateValue);
+          if (!isNaN(dateObj.getTime())) {
+            setSelectedDate(dateObj);
+          }
+        } catch (e) {
+          console.error('Error parsing date:', e);
+        }
+      }
+      
+      setFormData({
+        id: initialData.id || '',
+        title: initialData.title || '',
+        date: dateValue,
+        session,
+        type,
+        description: initialData.description || '',
+      });
+      
+      // Reset dropdowns
+      setShowTypeDropdown(false);
+      setShowSessionDropdown(false);
+      setShowDatePicker(false);
     }
-  }, [isOpen]);
+  }, [initialData, isOpen]);
 
   const handleInputChange = (field: keyof OverrideData, value: string | 'morning' | 'evening' | 'both') => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -137,6 +181,7 @@ export function AddOverrideDialog({ isOpen, onClose, onSave, isLoading = false }
 
   const handleClose = () => {
     setFormData({
+      id: '',
       title: '',
       date: '',
       session: 'both',
@@ -160,6 +205,8 @@ export function AddOverrideDialog({ isOpen, onClose, onSave, isLoading = false }
     { value: 'evening', label: 'Evening Session' },
   ];
 
+  if (!isOpen) return null;
+
   return (
     <Modal
       visible={isOpen}
@@ -171,7 +218,7 @@ export function AddOverrideDialog({ isOpen, onClose, onSave, isLoading = false }
         <View style={styles.dialog}>
           {/* Header */}
           <View style={styles.header}>
-            <ThemedText style={styles.title}>Add Schedule Holiday</ThemedText>
+            <ThemedText style={styles.title}>Edit Schedule Holiday</ThemedText>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <X />
             </TouchableOpacity>
@@ -339,7 +386,7 @@ export function AddOverrideDialog({ isOpen, onClose, onSave, isLoading = false }
               disabled={isLoading}
             >
               <ThemedText style={styles.saveButtonText}>
-                {isLoading ? 'Adding...' : 'Add Holiday'}
+                {isLoading ? 'Updating...' : 'Update Holiday'}
               </ThemedText>
             </TouchableOpacity>
           </View>
@@ -413,6 +460,10 @@ const styles = StyleSheet.create({
     color: '#111827',
     backgroundColor: '#FFFFFF',
   },
+  inputText: {
+    fontSize: 16,
+    color: '#111827',
+  },
   datePickerContainer: {
     marginTop: 8,
     backgroundColor: '#FFFFFF',
@@ -476,10 +527,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#111827',
   },
-  inputText: {
-    fontSize: 16,
-    color: '#111827',
-  },
   textArea: {
     height: 80,
     textAlignVertical: 'top',
@@ -520,3 +567,4 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 });
+
