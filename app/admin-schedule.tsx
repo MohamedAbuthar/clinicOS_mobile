@@ -1,9 +1,9 @@
 import { AddOverrideDialog } from '@/components/AddOverrideDialog';
 import { AdminSidebar } from '@/components/AdminSidebar';
-import { EditScheduleDialog } from '@/components/EditScheduleDialog';
+import { EditOverrideDialog } from '@/components/EditOverrideDialog';
 import { ThemedText } from '@/components/themed-text';
 import { getCurrentUser } from '@/lib/firebase/auth';
-import { createDoctorSchedule, createScheduleOverride, getAllDoctors, getDoctorSchedule, getScheduleOverrides, updateDoctorSchedule } from '@/lib/firebase/firestore';
+import { createScheduleOverride, deleteScheduleOverride, getAllDoctors, getDocument, getScheduleOverrides, updateScheduleOverride } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -78,18 +78,6 @@ const ChevronDown = () => (
   </Svg>
 );
 
-const Edit = () => (
-  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-    <Path
-      d="M11 4H4C3.46957 4 2.96086 4.21071 2.58579 4.58579C2.21071 4.96086 2 5.46957 2 6V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13M18.5 2.5C18.8978 2.10218 19.4374 1.87868 20 1.87868C20.5626 1.87868 21.1022 2.10218 21.5 2.5C21.8978 2.89782 22.1213 3.43739 22.1213 4C22.1213 4.56261 21.8978 5.10218 21.5 5.5L12 15L8 16L9 12L18.5 2.5Z"
-      stroke="#6B7280"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </Svg>
-);
-
 const Calendar = () => (
   <Svg width={48} height={48} viewBox="0 0 24 24" fill="none">
     <Path
@@ -121,6 +109,37 @@ const Check = () => (
   </Svg>
 );
 
+const Edit = () => (
+  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M11 4H4C3.46957 4 2.96086 4.21071 2.58579 4.58579C2.21071 4.96086 2 5.46957 2 6V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13M18.5 2.5C18.8978 2.10218 19.4374 1.87868 20 1.87868C20.5626 1.87868 21.1022 2.10218 21.5 2.5C21.8978 2.89782 22.1213 3.43739 22.1213 4C22.1213 4.56261 21.8978 5.10218 21.5 5.5L12 15L8 16L9 12L18.5 2.5Z"
+      stroke="#6B7280"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+const Trash = () => (
+  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M3 6H5H21M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z"
+      stroke="#EF4444"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Path
+      d="M10 11V17M14 11V17"
+      stroke="#EF4444"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
 interface Doctor {
   id: string;
   name: string;
@@ -132,15 +151,6 @@ interface Doctor {
   };
 }
 
-interface ScheduleData {
-  id?: string;
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-  slotDuration: number;
-  isActive: boolean;
-}
-
 interface HolidayData {
   id: string;
   title: string;
@@ -149,96 +159,19 @@ interface HolidayData {
   endTime?: string;
   type: string;
   description?: string;
+  displayType?: string;
+  doctorId?: string;
 }
-
-interface ScheduleRowProps {
-  day: string;
-  dayOfWeek: number;
-  timeRange?: string;
-  slotDuration?: string;
-  status: 'active' | 'off';
-  scheduleId?: string;
-  onEdit: (day: string, dayOfWeek: number, scheduleData?: ScheduleData) => void;
-}
-
-const ScheduleRow: React.FC<ScheduleRowProps> = ({
-  day,
-  dayOfWeek,
-  timeRange,
-  slotDuration,
-  status,
-  scheduleId,
-  onEdit,
-}) => {
-  const handleEdit = () => {
-    const scheduleData = status === 'active' && timeRange ? {
-      id: scheduleId,
-      dayOfWeek,
-      startTime: timeRange.split(' - ')[0],
-      endTime: timeRange.split(' - ')[1],
-      slotDuration: parseInt(slotDuration?.replace(' min slots', '') || '10'),
-      isActive: true
-    } : undefined;
-    
-    onEdit(day, dayOfWeek, scheduleData);
-  };
-
-  return (
-    <View style={styles.scheduleRow}>
-      <View style={styles.scheduleRowContent}>
-        <View style={styles.scheduleRowLeft}>
-          <ThemedText style={styles.dayName}>{day}</ThemedText>
-          
-          {status === 'active' ? (
-            <View style={styles.scheduleDetailsContainer}>
-              <View style={styles.timeContainer}>
-                <Clock />
-                <ThemedText style={styles.timeText}>{timeRange}</ThemedText>
-              </View>
-              
-              <View style={styles.badgesContainer}>
-                <View style={[styles.badge, styles.slotBadge]}>
-                  <ThemedText style={styles.badgeText}>{slotDuration}</ThemedText>
-                </View>
-                
-                <View style={[styles.badge, styles.activeBadge]}>
-                  <ThemedText style={styles.badgeText}>Active</ThemedText>
-                </View>
-              </View>
-            </View>
-          ) : (
-            <View style={[styles.badge, styles.offBadge]}>
-              <ThemedText style={styles.offBadgeText}>Off Day</ThemedText>
-            </View>
-          )}
-        </View>
-        
-        <TouchableOpacity 
-          style={styles.editButton}
-          onPress={handleEdit}
-        >
-          <Edit />
-          <ThemedText style={styles.editButtonText}>Edit</ThemedText>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
 
 export default function AdminSchedule() {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddHolidayDialogOpen, setIsAddHolidayDialogOpen] = useState(false);
-  const [editingSchedule, setEditingSchedule] = useState<{
-    day: string;
-    dayOfWeek: number;
-    scheduleData?: ScheduleData;
-  } | null>(null);
+  const [isEditOverrideDialogOpen, setIsEditOverrideDialogOpen] = useState(false);
+  const [editingOverride, setEditingOverride] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [selectedDoctor, setSelectedDoctor] = useState<string>('');
-  const [schedules, setSchedules] = useState<ScheduleData[]>([]);
   const [holidays, setHolidays] = useState<HolidayData[]>([]);
   const [user, setUser] = useState<any>(null);
   const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
@@ -249,7 +182,35 @@ export default function AdminSchedule() {
       try {
         const currentUser = getCurrentUser();
         if (currentUser) {
-          setUser(currentUser);
+          // Load user profile from Firestore to get role
+          const userResult = await getDocument('users', currentUser.uid);
+          if (userResult.success && userResult.data) {
+            const userData = userResult.data as any;
+            
+            // Check if user is assistant - redirect if they are
+            if (userData.role === 'assistant') {
+              Alert.alert(
+                'Access Denied',
+                'Assistants do not have access to the Schedule page.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => router.replace('/admin-dashboard')
+                  }
+                ]
+              );
+              return;
+            }
+            
+            setUser(userData);
+          } else {
+            // Fallback to Firebase user if Firestore data not found
+            setUser({
+              name: currentUser.displayName || 'Admin User',
+              email: currentUser.email || '',
+              role: 'admin'
+            });
+          }
           
           const doctorsResult = await getAllDoctors();
           if (doctorsResult.success && doctorsResult.data) {
@@ -278,34 +239,12 @@ export default function AdminSchedule() {
     loadDoctors();
   }, [router]);
 
-  // Load schedules when doctor is selected
+  // Load holidays when doctor is selected
   useEffect(() => {
     if (selectedDoctor) {
-      loadSchedules();
       loadHolidays();
     }
   }, [selectedDoctor]);
-
-  const loadSchedules = async () => {
-    try {
-      setIsLoading(true);
-      console.log('Loading schedules for doctor:', selectedDoctor);
-      const result = await getDoctorSchedule(selectedDoctor);
-      console.log('Schedule result:', result);
-      if (result.success && result.data) {
-        console.log('Setting schedules:', result.data);
-        setSchedules(result.data as ScheduleData[]);
-      } else {
-        console.log('No schedule data, setting empty array');
-        setSchedules([]);
-      }
-    } catch (error) {
-      console.error('Error loading schedules:', error);
-      setSchedules([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const loadHolidays = async () => {
     try {
@@ -331,7 +270,9 @@ export default function AdminSchedule() {
             startTime: holiday.startTime,
             endTime: holiday.endTime,
             type: holiday.type,
-            description: holiday.description || ''
+            description: holiday.description || '',
+            displayType: holiday.displayType, // Store displayType if available
+            doctorId: holiday.doctorId, // Store doctorId
           };
         });
         setHolidays(transformedHolidays);
@@ -361,55 +302,6 @@ export default function AdminSchedule() {
     setSidebarOpen(false);
   };
 
-  const handleEditSchedule = (day: string, dayOfWeek: number, scheduleData?: ScheduleData) => {
-    setEditingSchedule({ day, dayOfWeek, scheduleData });
-    setIsEditDialogOpen(true);
-  };
-
-  const handleSaveSchedule = async (formData: any) => {
-    if (!selectedDoctor || !editingSchedule) return;
-    
-    setIsLoading(true);
-    try {
-      const scheduleData = {
-        dayOfWeek: editingSchedule.dayOfWeek,
-        startTime: formData.startTime,
-        endTime: formData.endTime,
-        slotDuration: parseInt(formData.slotDuration.replace(' min slots', '')),
-        isActive: formData.status === 'active'
-      };
-
-      let result;
-      if (editingSchedule.scheduleData?.id) {
-        // Update existing schedule
-        result = await updateDoctorSchedule(selectedDoctor, editingSchedule.scheduleData.id, scheduleData);
-      } else {
-        // Create new schedule
-        result = await createDoctorSchedule(selectedDoctor, scheduleData);
-      }
-
-      if (result.success) {
-        Alert.alert('Success', 'Schedule updated successfully!');
-        setIsEditDialogOpen(false);
-        setEditingSchedule(null);
-        // Reload schedules to reflect changes
-        await loadSchedules();
-      } else {
-        Alert.alert('Error', result.error || 'Failed to update schedule. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error saving schedule:', error);
-      Alert.alert('Error', 'Failed to update schedule. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const closeEditDialog = () => {
-    setIsEditDialogOpen(false);
-    setEditingSchedule(null);
-  };
-
   const handleDoctorSelect = (doctorId: string) => {
     console.log('Doctor selected:', doctorId);
     setSelectedDoctor(doctorId);
@@ -429,6 +321,302 @@ export default function AdminSchedule() {
     setIsAddHolidayDialogOpen(false);
   };
 
+  // Helper function to convert startTime/endTime to session
+  const timeRangeToSession = (startTime?: string, endTime?: string): 'morning' | 'evening' | 'both' => {
+    if (!startTime || !endTime) {
+      return 'both';
+    }
+    
+    const [hours] = startTime.split(':').map(Number);
+    
+    // Morning session typically starts before 13:00 (1 PM)
+    // Evening session typically starts at or after 13:00 (1 PM)
+    if (hours < 13) {
+      return 'morning';
+    } else {
+      return 'evening';
+    }
+  };
+
+  const handleEditOverride = (holiday: HolidayData) => {
+    // Check if there's a matching override for the other session (same date, same reason)
+    // This helps determine if it was originally created as "both"
+    let session: 'morning' | 'evening' | 'both' = timeRangeToSession(holiday.startTime, holiday.endTime);
+    
+    // Check if there's another override with same date and reason but different time
+    const matchingOverride = holidays.find(h => 
+      h.id !== holiday.id && 
+      h.date === holiday.date && 
+      h.title === holiday.title &&
+      ((h.startTime === '09:00' && holiday.startTime === '14:00') ||
+       (h.startTime === '14:00' && holiday.startTime === '09:00'))
+    );
+    
+    if (matchingOverride) {
+      // If we find a matching override, it means this was created as "both"
+      session = 'both';
+    }
+    
+    // Map backend type to UI type - use displayType if available (stored when creating)
+    let uiType: 'special-event' | 'holiday' | 'extended-hours';
+    if (holiday.displayType) {
+      // Use stored displayType for accurate mapping
+      uiType = holiday.displayType as 'special-event' | 'holiday' | 'extended-hours';
+    } else {
+      // Fallback: map backend type to UI type
+      if (holiday.type === 'holiday') {
+        uiType = 'holiday';
+      } else if (holiday.type === 'extended_hours') {
+        uiType = 'extended-hours';
+      } else {
+        uiType = 'special-event';
+      }
+    }
+    
+    setEditingOverride({
+      id: holiday.id,
+      title: holiday.title,
+      date: holiday.date,
+      session,
+      type: uiType,
+      description: holiday.description || '',
+    });
+    setIsEditOverrideDialogOpen(true);
+  };
+
+  const handleSaveEditOverride = async (data: any) => {
+    if (!selectedDoctor) {
+      Alert.alert('Error', 'Please select a doctor first');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Get the original override to check if it was "both"
+      const originalOverride = holidays.find(h => h.id === data.id);
+      const wasBoth = originalOverride && holidays.some(h => 
+        h.id !== originalOverride.id && 
+        h.date === originalOverride.date && 
+        h.title === originalOverride.title &&
+        ((h.startTime === '09:00' && originalOverride.startTime === '14:00') ||
+         (h.startTime === '14:00' && originalOverride.startTime === '09:00'))
+      );
+
+      // Map UI types to backend types
+      const overrideType = data.type === 'special-event' || data.type === 'extended-hours' 
+        ? 'extended_hours' 
+        : data.type === 'holiday' 
+        ? 'holiday' 
+        : 'extended_hours';
+      
+      // If changing from "both" to a single session, delete the other session override
+      if (wasBoth && data.session !== 'both' && originalOverride) {
+        // Find the matching override for the other session
+        const otherSessionOverride = holidays.find(h => 
+          h.id !== data.id && 
+          h.date === originalOverride.date && 
+          h.title === originalOverride.title &&
+          ((data.session === 'morning' && h.startTime === '14:00') ||
+           (data.session === 'evening' && h.startTime === '09:00'))
+        );
+        
+        if (otherSessionOverride) {
+          // Delete the other session override
+          await deleteScheduleOverride(otherSessionOverride.id);
+        }
+      }
+
+      // If changing to "both", we need to create/update both sessions
+      if (data.session === 'both') {
+        // Check if both sessions exist
+        const morningOverride = holidays.find(h => 
+          h.id !== data.id &&
+          h.date === data.date && 
+          h.title === originalOverride?.title &&
+          h.startTime === '09:00'
+        );
+        const eveningOverride = holidays.find(h => 
+          h.id !== data.id &&
+          h.date === data.date && 
+          h.title === originalOverride?.title &&
+          h.startTime === '14:00'
+        );
+
+        const isMorningOverride = originalOverride?.startTime === '09:00';
+        const isEveningOverride = originalOverride?.startTime === '14:00';
+
+        // Update or create morning session
+        if (isMorningOverride && originalOverride) {
+          // Current override is morning, update it
+          await updateScheduleOverride(data.id, {
+            date: data.date,
+            startTime: '09:00',
+            endTime: '12:00',
+            reason: data.title,
+            type: overrideType as 'holiday' | 'extended_hours' | 'reduced_hours',
+            description: data.description || '',
+            displayType: data.type,
+          });
+        } else if (morningOverride) {
+          // Morning exists but different ID, update it
+          await updateScheduleOverride(morningOverride.id, {
+            date: data.date,
+            startTime: '09:00',
+            endTime: '12:00',
+            reason: data.title,
+            type: overrideType as 'holiday' | 'extended_hours' | 'reduced_hours',
+            description: data.description || '',
+            displayType: data.type,
+          });
+        } else {
+          // Create morning session
+          await createScheduleOverride({
+            doctorId: selectedDoctor,
+            reason: data.title,
+            date: data.date,
+            startTime: '09:00',
+            endTime: '12:00',
+            type: overrideType as 'holiday' | 'extended_hours' | 'reduced_hours',
+            description: data.description || '',
+            displayType: data.type,
+          });
+        }
+
+        // Update or create evening session
+        if (isEveningOverride && originalOverride) {
+          // Current override is evening, update it
+          await updateScheduleOverride(data.id, {
+            date: data.date,
+            startTime: '14:00',
+            endTime: '18:00',
+            reason: data.title,
+            type: overrideType as 'holiday' | 'extended_hours' | 'reduced_hours',
+            description: data.description || '',
+            displayType: data.type,
+          });
+        } else if (eveningOverride) {
+          // Evening exists but different ID, update it
+          await updateScheduleOverride(eveningOverride.id, {
+            date: data.date,
+            startTime: '14:00',
+            endTime: '18:00',
+            reason: data.title,
+            type: overrideType as 'holiday' | 'extended_hours' | 'reduced_hours',
+            description: data.description || '',
+            displayType: data.type,
+          });
+        } else {
+          // Create evening session
+          await createScheduleOverride({
+            doctorId: selectedDoctor,
+            reason: data.title,
+            date: data.date,
+            startTime: '14:00',
+            endTime: '18:00',
+            type: overrideType as 'holiday' | 'extended_hours' | 'reduced_hours',
+            description: data.description || '',
+            displayType: data.type,
+          });
+        }
+
+        // If the current override was a single session that's now part of "both", 
+        // and we've created the other session, we might need to delete the current one
+        // if it's not morning or evening (shouldn't happen, but handle edge case)
+        if (originalOverride && originalOverride.startTime && 
+            originalOverride.startTime !== '09:00' && originalOverride.startTime !== '14:00') {
+          // If we created both sessions, delete the original single session override
+          await deleteScheduleOverride(data.id);
+        }
+      } else {
+        // Single session update
+        const { startTime, endTime } = sessionToTimeRange(data.session);
+        
+        const result = await updateScheduleOverride(data.id, {
+          date: data.date,
+          startTime,
+          endTime,
+          reason: data.title,
+          type: overrideType as 'holiday' | 'extended_hours' | 'reduced_hours',
+          description: data.description || '',
+          displayType: data.type, // Store the UI type for correct mapping when editing
+        });
+        
+        if (!result.success) {
+          Alert.alert('Error', result.error || 'Failed to update schedule override. Please try again.');
+          return;
+        }
+      }
+      
+      Alert.alert('Success', 'Schedule override updated successfully!');
+      setIsEditOverrideDialogOpen(false);
+      setEditingOverride(null);
+      await loadHolidays();
+    } catch (error) {
+      console.error('Error updating override:', error);
+      Alert.alert('Error', 'Failed to update schedule override. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteOverride = async (holidayId: string) => {
+    if (!selectedDoctor) {
+      Alert.alert('Error', 'Please select a doctor first');
+      return;
+    }
+
+    Alert.alert(
+      'Delete Holiday',
+      'Are you sure you want to delete this holiday?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setIsLoading(true);
+            try {
+              const result = await deleteScheduleOverride(holidayId);
+              
+              if (result.success) {
+                Alert.alert('Success', 'Holiday deleted successfully!');
+                await loadHolidays();
+              } else {
+                Alert.alert('Error', result.error || 'Failed to delete holiday. Please try again.');
+              }
+            } catch (error) {
+              console.error('Error deleting override:', error);
+              Alert.alert('Error', 'Failed to delete holiday. Please try again.');
+            } finally {
+              setIsLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const closeEditOverrideDialog = () => {
+    setIsEditOverrideDialogOpen(false);
+    setEditingOverride(null);
+  };
+
+  // Helper function to convert session to startTime/endTime
+  const sessionToTimeRange = (session: 'morning' | 'evening' | 'both'): { startTime?: string; endTime?: string } => {
+    switch (session) {
+      case 'morning':
+        return { startTime: '09:00', endTime: '12:00' };
+      case 'evening':
+        return { startTime: '14:00', endTime: '18:00' };
+      case 'both':
+      default:
+        return { startTime: undefined, endTime: undefined };
+    }
+  };
+
   const handleSaveHoliday = async (data: any) => {
     if (!selectedDoctor) {
       Alert.alert('Error', 'Please select a doctor first');
@@ -439,28 +627,76 @@ export default function AdminSchedule() {
     try {
       console.log('Saving holiday:', data);
       
-      // Parse time range into start and end times
-      const [startTime = '', endTime = ''] = data.timeRange ? data.timeRange.split(' - ') : ['', ''];
+      // Map UI types to backend types
+      const overrideType = data.type === 'special-event' || data.type === 'extended-hours' 
+        ? 'extended_hours' 
+        : data.type === 'holiday' 
+        ? 'holiday' 
+        : 'extended_hours'; // Default fallback
       
-      const holidayData = {
-        doctorId: selectedDoctor,
-        reason: data.title,
-        date: data.date,
-        startTime: startTime.trim() || undefined,
-        endTime: endTime.trim() || undefined,
-        type: data.type === 'special-event' ? 'extended_hours' : data.type,
-        description: data.description || '',
-      };
-      
-      const result = await createScheduleOverride(holidayData);
-      
-      if (result.success) {
-        Alert.alert('Success', 'Holiday added successfully!');
-        setIsAddHolidayDialogOpen(false);
-        // Reload holidays to show the new one
-        await loadHolidays();
+      // If "both" is selected, create two separate overrides (morning and evening)
+      if (data.session === 'both') {
+        // Create morning session override
+        const morningHolidayData = {
+          doctorId: selectedDoctor,
+          reason: data.title,
+          date: data.date,
+          startTime: '09:00',
+          endTime: '12:00',
+          type: overrideType as 'holiday' | 'extended_hours' | 'reduced_hours',
+          description: data.description || '',
+          displayType: data.type, // Store the UI type for correct mapping when editing
+        };
+        
+        const morningResult = await createScheduleOverride(morningHolidayData);
+        
+        // Create evening session override
+        const eveningHolidayData = {
+          doctorId: selectedDoctor,
+          reason: data.title,
+          date: data.date,
+          startTime: '14:00',
+          endTime: '18:00',
+          type: overrideType as 'holiday' | 'extended_hours' | 'reduced_hours',
+          description: data.description || '',
+          displayType: data.type, // Store the UI type for correct mapping when editing
+        };
+        
+        const eveningResult = await createScheduleOverride(eveningHolidayData);
+        
+        if (morningResult.success && eveningResult.success) {
+          Alert.alert('Success', 'Holiday added successfully for both sessions!');
+          setIsAddHolidayDialogOpen(false);
+          // Reload holidays to show the new ones
+          await loadHolidays();
+        } else {
+          Alert.alert('Error', 'Failed to add holiday for one or both sessions. Please try again.');
+        }
       } else {
-        Alert.alert('Error', result.error || 'Failed to add holiday. Please try again.');
+        // For single session (morning or evening)
+        const { startTime, endTime } = sessionToTimeRange(data.session);
+        
+        const holidayData = {
+          doctorId: selectedDoctor,
+          reason: data.title,
+          date: data.date,
+          startTime,
+          endTime,
+          type: overrideType as 'holiday' | 'extended_hours' | 'reduced_hours',
+          description: data.description || '',
+          displayType: data.type, // Store the UI type for correct mapping when editing
+        };
+        
+        const result = await createScheduleOverride(holidayData);
+        
+        if (result.success) {
+          Alert.alert('Success', 'Holiday added successfully!');
+          setIsAddHolidayDialogOpen(false);
+          // Reload holidays to show the new one
+          await loadHolidays();
+        } else {
+          Alert.alert('Error', result.error || 'Failed to add holiday. Please try again.');
+        }
       }
     } catch (error) {
       console.error('Error saving holiday:', error);
@@ -470,39 +706,6 @@ export default function AdminSchedule() {
     }
   };
 
-  // Get weekly schedule data
-  const getWeeklySchedule = (): ScheduleRowProps[] => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    
-    console.log('getWeeklySchedule - schedules:', schedules);
-    console.log('getWeeklySchedule - selectedDoctor:', selectedDoctor);
-    
-    return days.map((day, index) => {
-      const schedule = schedules.find(s => s.dayOfWeek === index);
-      console.log(`Day ${day} (${index}):`, schedule);
-      
-      if (schedule && schedule.isActive) {
-        return {
-          day,
-          dayOfWeek: index,
-          timeRange: `${schedule.startTime} - ${schedule.endTime}`,
-          slotDuration: `${schedule.slotDuration} min slots`,
-          status: 'active' as const,
-          scheduleId: schedule.id,
-          onEdit: handleEditSchedule,
-        };
-      } else {
-        return {
-          day,
-          dayOfWeek: index,
-          status: 'off' as const,
-          onEdit: handleEditSchedule,
-        };
-      }
-    });
-  };
-
-  const weeklySchedule = getWeeklySchedule();
   const selectedDoctorData = doctors.find(d => d.id === selectedDoctor);
 
   return (
@@ -515,7 +718,7 @@ export default function AdminSchedule() {
           </TouchableOpacity>
           <View>
             <ThemedText style={styles.title}>Schedule</ThemedText>
-            <ThemedText style={styles.subtitle}>Manage doctor schedules and slot durations</ThemedText>
+            <ThemedText style={styles.subtitle}>Manage schedule holidays and overrides</ThemedText>
           </View>
         </View>
         <TouchableOpacity 
@@ -535,8 +738,8 @@ export default function AdminSchedule() {
         currentPath="/admin-schedule"
         onNavigate={handleNavigate}
         onLogout={handleLogout}
-        userName="Admin User"
-        userRole="Administrator"
+        userName={user?.name || 'Admin User'}
+        userRole={user?.role || 'Administrator'}
       />
 
       <ScrollView 
@@ -558,31 +761,6 @@ export default function AdminSchedule() {
               </ThemedText>
               <ChevronDown />
             </TouchableOpacity>
-          </View>
-
-          {/* Weekly Schedule */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <ThemedText style={styles.sectionTitle}>Weekly Schedule</ThemedText>
-              <ThemedText style={styles.sectionSubtitle}>
-                Default schedule for {selectedDoctorData?.name || 'selected doctor'}
-              </ThemedText>
-            </View>
-            
-            <View style={styles.scheduleList}>
-              {weeklySchedule.map((schedule, index) => (
-                <ScheduleRow
-                  key={index}
-                  day={schedule.day}
-                  dayOfWeek={schedule.dayOfWeek}
-                  timeRange={schedule.timeRange}
-                  slotDuration={schedule.slotDuration}
-                  status={schedule.status}
-                  scheduleId={schedule.scheduleId}
-                  onEdit={schedule.onEdit}
-                />
-              ))}
-            </View>
           </View>
 
           {/* Schedule Overrides */}
@@ -618,6 +796,22 @@ export default function AdminSchedule() {
                         <View style={styles.holidayBadge}>
                           <ThemedText style={styles.holidayBadgeText}>{holiday.type}</ThemedText>
                         </View>
+                      </View>
+                      <View style={styles.holidayCardActions}>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => handleEditOverride(holiday)}
+                          disabled={isLoading}
+                        >
+                          <Edit />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => handleDeleteOverride(holiday.id)}
+                          disabled={isLoading}
+                        >
+                          <Trash />
+                        </TouchableOpacity>
                       </View>
                     </View>
                   </View>
@@ -681,12 +875,12 @@ export default function AdminSchedule() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Edit Schedule Dialog */}
-      <EditScheduleDialog
-        isOpen={isEditDialogOpen}
-        onClose={closeEditDialog}
-        onSave={handleSaveSchedule}
-        initialData={editingSchedule}
+      {/* Edit Override Dialog */}
+      <EditOverrideDialog
+        isOpen={isEditOverrideDialogOpen}
+        onClose={closeEditOverrideDialog}
+        onSave={handleSaveEditOverride}
+        initialData={editingOverride}
         isLoading={isLoading}
       />
 
@@ -792,99 +986,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#374151',
   },
-  scheduleList: {
-    gap: 12,
-  },
-  scheduleRow: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    padding: 16,
-    minHeight: 100,
-  },
-  scheduleRowContent: {
-    flexDirection: 'column',
-    gap: 12,
-  },
-  scheduleRowLeft: {
-    flexDirection: 'column',
-    flex: 1,
-    gap: 10,
-  },
-  dayName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 4,
-  },
-  scheduleDetailsContainer: {
-    flexDirection: 'column',
-    gap: 10,
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  timeText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  badgesContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  badge: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 6,
-    minWidth: 95,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  slotBadge: {
-    backgroundColor: '#14B8A6',
-  },
-  activeBadge: {
-    backgroundColor: '#10B981',
-  },
-  offBadge: {
-    backgroundColor: '#E5E7EB',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  offBadgeText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignSelf: 'flex-start',
-  },
-  editButtonText: {
-    fontSize: 14,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -964,10 +1065,26 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   holidayCardContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     gap: 12,
   },
   holidayCardLeft: {
+    flex: 1,
     gap: 8,
+  },
+  holidayCardActions: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  actionButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   holidayTitle: {
     fontSize: 16,

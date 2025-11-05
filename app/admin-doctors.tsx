@@ -97,19 +97,160 @@ const calculateDoctorStats = async (doctorId: string) => {
 
 // Helper function to transform doctor data
 const transformDoctorData = async (doctors: any[]) => {
-  // Fetch all assistants to get their names
-  const assistantsResult = await getDocuments('assistants');
+  // Fetch all assistants from multiple collections (same as AddDoctorDialog)
+  const collectionsToTry = [
+    'assistants',
+    'staff',
+    'employees',
+    'personnel',
+    'team',
+    'workers',
+    'members'
+  ];
+  
   const usersResult = await getDocuments('users');
+  let allAssistants: any[] = [];
+  
+  // Fetch from all collections
+  for (const collectionName of collectionsToTry) {
+    try {
+      const result = await getDocuments(collectionName);
+      if (result.success && result.data && result.data.length > 0) {
+        allAssistants = [...allAssistants, ...result.data];
+      }
+    } catch (error) {
+      console.log(`Error fetching ${collectionName}:`, error);
+    }
+  }
+  
+  // Remove duplicates
+  const uniqueAssistants = allAssistants.filter((assistant, index, self) => 
+    index === self.findIndex(a => a.id === assistant.id)
+  );
+  
+  console.log(`Found ${uniqueAssistants.length} unique assistants from all collections`);
   
   let assistantsMap = new Map();
-  if (assistantsResult.success && assistantsResult.data && usersResult.success && usersResult.data) {
-    // Create a map of assistant document IDs to their user names
-    assistantsResult.data.forEach((assistant: any) => {
-      const user: any = usersResult.data.find((u: any) => u.id === assistant.userId);
-      if (user) {
-        assistantsMap.set(assistant.id, user.name || 'Unknown Assistant');
+  if (uniqueAssistants.length > 0) {
+    console.log('Building assistants map from', uniqueAssistants.length, 'assistants');
+    // Create a map of assistant document IDs to their names
+    uniqueAssistants.forEach((assistant: any) => {
+      console.log(`\n🔍 Processing assistant ${assistant.id}:`, JSON.stringify(assistant, null, 2));
+      
+      // Try multiple ways to get the assistant name
+      let assistantName = '';
+      
+      // Use same name extraction strategies as AddDoctorDialog, but with proper undefined checks
+      const nameStrategies = [
+        () => assistant.name,
+        () => assistant.user?.name,
+        () => assistant.fullName,
+        () => assistant.displayName,
+        () => {
+          const first = assistant.firstName;
+          const last = assistant.lastName;
+          if (first && last) return `${first} ${last}`;
+          if (first) return first;
+          if (last) return last;
+          return null;
+        },
+        () => assistant.firstName,
+        () => {
+          const first = assistant.user?.firstName;
+          const last = assistant.user?.lastName;
+          if (first && last) return `${first} ${last}`;
+          if (first) return first;
+          if (last) return last;
+          return null;
+        },
+        () => assistant.user?.firstName,
+        () => assistant.profile?.name,
+        () => {
+          const first = assistant.profile?.firstName;
+          const last = assistant.profile?.lastName;
+          if (first && last) return `${first} ${last}`;
+          if (first) return first;
+          if (last) return last;
+          return null;
+        },
+        () => assistant.profile?.firstName,
+        () => assistant.data?.name,
+        () => {
+          const first = assistant.data?.firstName;
+          const last = assistant.data?.lastName;
+          if (first && last) return `${first} ${last}`;
+          if (first) return first;
+          if (last) return last;
+          return null;
+        },
+        () => assistant.data?.firstName,
+        () => assistant.details?.name,
+        () => {
+          const first = assistant.details?.firstName;
+          const last = assistant.details?.lastName;
+          if (first && last) return `${first} ${last}`;
+          if (first) return first;
+          if (last) return last;
+          return null;
+        },
+        () => assistant.details?.firstName,
+        () => assistant.info?.name,
+        () => {
+          const first = assistant.info?.firstName;
+          const last = assistant.info?.lastName;
+          if (first && last) return `${first} ${last}`;
+          if (first) return first;
+          if (last) return last;
+          return null;
+        },
+        () => assistant.info?.firstName
+      ];
+      
+      for (let i = 0; i < nameStrategies.length; i++) {
+        try {
+          const name = nameStrategies[i]();
+          if (name && typeof name === 'string' && name !== 'undefined' && name !== 'null' && name.trim() !== '') {
+            assistantName = name.trim();
+            console.log(`✅ Found name using strategy ${i + 1}: "${assistantName}"`);
+            break;
+          }
+        } catch (error) {
+          // Continue to next strategy
+        }
+      }
+      
+      // Fallback: Look up user by userId
+      if (!assistantName && assistant.userId && usersResult.success && usersResult.data) {
+        const user: any = usersResult.data.find((u: any) => u.id === assistant.userId);
+        if (user?.name) {
+          assistantName = user.name;
+          console.log(`✅ Found name via userId lookup: "${assistantName}"`);
+        }
+      }
+      
+      // Also check if assistantId is actually a userId in users collection
+      if (!assistantName && usersResult.success && usersResult.data) {
+        const user: any = usersResult.data.find((u: any) => u.id === assistant.id);
+        if (user?.name) {
+          assistantName = user.name;
+          console.log(`✅ Found name via direct userId lookup: "${assistantName}"`);
+        }
+      }
+      
+      // Only store if we have a valid name (not undefined, null, or empty)
+      if (assistantName && 
+          assistant.id && 
+          assistantName !== 'undefined' && 
+          assistantName !== 'null' && 
+          !assistantName.includes('undefined') &&
+          assistantName.trim() !== '') {
+        assistantsMap.set(assistant.id, assistantName);
+        console.log(`✅ Mapped assistant ${assistant.id} -> ${assistantName}`);
+      } else {
+        console.log(`❌ Could not map assistant ${assistant.id} - no valid name found. Got: "${assistantName}"`);
       }
     });
+    console.log('Final assistants map:', Array.from(assistantsMap.entries()));
   }
   
   const transformedDoctors = await Promise.all(
@@ -120,14 +261,161 @@ const transformDoctorData = async (doctors: any[]) => {
       const assignedAssistantIds = doctor.assignedAssistants || [];
       const assignedAssistantNames: string[] = [];
       
+      console.log(`\n=== Doctor ${doctor.id} (${doctor.user?.name || 'Unknown'}) ===`);
+      console.log(`Assigned Assistant IDs:`, assignedAssistantIds);
+      console.log(`Assistants map size:`, assistantsMap.size);
+      console.log(`Total assistants found:`, uniqueAssistants.length);
+      
       if (assignedAssistantIds.length > 0) {
         for (const assistantId of assignedAssistantIds) {
-          const assistantName = assistantsMap.get(assistantId);
-          if (assistantName) {
+          let assistantName = assistantsMap.get(assistantId);
+          
+          // Try to find in all assistants
+          if (!assistantName && uniqueAssistants.length > 0) {
+            const assistant: any = uniqueAssistants.find((a: any) => a.id === assistantId);
+            if (assistant) {
+              // Use same name extraction strategies as AddDoctorDialog, but with proper undefined checks
+              const nameStrategies = [
+                () => assistant.name,
+                () => assistant.user?.name,
+                () => assistant.fullName,
+                () => assistant.displayName,
+                () => {
+                  const first = assistant.firstName;
+                  const last = assistant.lastName;
+                  if (first && last) return `${first} ${last}`;
+                  if (first) return first;
+                  if (last) return last;
+                  return null;
+                },
+                () => assistant.firstName,
+                () => {
+                  const first = assistant.user?.firstName;
+                  const last = assistant.user?.lastName;
+                  if (first && last) return `${first} ${last}`;
+                  if (first) return first;
+                  if (last) return last;
+                  return null;
+                },
+                () => assistant.user?.firstName,
+                () => assistant.profile?.name,
+                () => {
+                  const first = assistant.profile?.firstName;
+                  const last = assistant.profile?.lastName;
+                  if (first && last) return `${first} ${last}`;
+                  if (first) return first;
+                  if (last) return last;
+                  return null;
+                },
+                () => assistant.profile?.firstName,
+                () => assistant.data?.name,
+                () => {
+                  const first = assistant.data?.firstName;
+                  const last = assistant.data?.lastName;
+                  if (first && last) return `${first} ${last}`;
+                  if (first) return first;
+                  if (last) return last;
+                  return null;
+                },
+                () => assistant.data?.firstName,
+                () => assistant.details?.name,
+                () => {
+                  const first = assistant.details?.firstName;
+                  const last = assistant.details?.lastName;
+                  if (first && last) return `${first} ${last}`;
+                  if (first) return first;
+                  if (last) return last;
+                  return null;
+                },
+                () => assistant.details?.firstName,
+                () => assistant.info?.name,
+                () => {
+                  const first = assistant.info?.firstName;
+                  const last = assistant.info?.lastName;
+                  if (first && last) return `${first} ${last}`;
+                  if (first) return first;
+                  if (last) return last;
+                  return null;
+                },
+                () => assistant.info?.firstName
+              ];
+              
+              for (const strategy of nameStrategies) {
+                try {
+                  const name = strategy();
+                  if (name && typeof name === 'string' && name !== 'undefined' && name !== 'null' && name.trim() !== '') {
+                    assistantName = name.trim();
+                    break;
+                  }
+                } catch (error) {
+                  // Continue to next strategy
+                }
+              }
+              
+              // Only add if we have a valid name
+              if (assistantName && 
+                  assistantName !== 'undefined' && 
+                  assistantName !== 'null' && 
+                  !assistantName.includes('undefined') &&
+                  assistantName.trim() !== '') {
+                assistantsMap.set(assistantId, assistantName);
+                assignedAssistantNames.push(assistantName);
+                console.log(`✅ Found assistant ${assistantId}: ${assistantName}`);
+              } else {
+                // If still no name, try to get from user collection via userId
+                if (assistant.userId && usersResult.success && usersResult.data) {
+                  const user: any = usersResult.data.find((u: any) => u.id === assistant.userId);
+                  if (user?.name && user.name.trim() !== '') {
+                    assistantName = user.name.trim();
+                    assistantsMap.set(assistantId, assistantName);
+                    assignedAssistantNames.push(assistantName);
+                    console.log(`✅ Found assistant ${assistantId} via user lookup: ${assistantName}`);
+                  }
+                }
+                // Also try looking up by the assistantId itself in users (in case assistantId is actually a userId)
+                if (!assistantName && usersResult.success && usersResult.data) {
+                  const user: any = usersResult.data.find((u: any) => u.id === assistantId);
+                  if (user?.name && user.name.trim() !== '') {
+                    assistantName = user.name.trim();
+                    assistantsMap.set(assistantId, assistantName);
+                    assignedAssistantNames.push(assistantName);
+                    console.log(`✅ Found assistant ${assistantId} as userId in users: ${assistantName}`);
+                  }
+                }
+                if (!assistantName || assistantName.includes('undefined')) {
+                  console.log(`❌ Could not find valid name for assistant ${assistantId}`);
+                }
+              }
+            } else {
+              // Assistant not found in any collection - try users collection directly
+              if (usersResult.success && usersResult.data) {
+                const user: any = usersResult.data.find((u: any) => u.id === assistantId);
+                if (user?.name && user.name.trim() !== '') {
+                  assistantName = user.name.trim();
+                  assistantsMap.set(assistantId, assistantName);
+                  assignedAssistantNames.push(assistantName);
+                  console.log(`✅ Found assistant ${assistantId} directly in users: ${assistantName}`);
+                } else {
+                  console.log(`❌ Assistant with ID ${assistantId} not found in any collection or users`);
+                }
+              } else {
+                console.log(`❌ Assistant with ID ${assistantId} not found in any collection`);
+              }
+            }
+          } else if (assistantName && 
+                     assistantName !== 'undefined' && 
+                     assistantName !== 'null' && 
+                     !assistantName.includes('undefined') &&
+                     assistantName.trim() !== '') {
             assignedAssistantNames.push(assistantName);
+            console.log(`✅ Found assistant ${assistantId} from map: ${assistantName}`);
+          } else if (assistantName) {
+            console.log(`❌ Skipping invalid assistant name from map for ${assistantId}: "${assistantName}"`);
           }
         }
       }
+      
+      console.log(`Final assistant names for doctor ${doctor.id}:`, assignedAssistantNames);
       
       return {
         id: doctor.id,
@@ -146,8 +434,16 @@ const transformDoctorData = async (doctors: any[]) => {
         online: doctor.isActive,
         phone: doctor.user?.phone || 'N/A',
         email: doctor.user?.email || 'N/A',
-        schedule: doctor.schedule || 'Mon-Fri, 9:00 AM - 5:00 PM',
-        room: doctor.room || 'Room 101'
+        schedule: doctor.schedule || (doctor.morningStartTime && doctor.eveningEndTime ? 
+          `Morning: ${doctor.morningStartTime} - ${doctor.morningEndTime || '12:00'}, Evening: ${doctor.eveningStartTime || '17:00'} - ${doctor.eveningEndTime}` : 
+          'Mon-Fri, 9:00 AM - 5:00 PM'),
+        room: doctor.room || 'Room 101',
+        startTime: doctor.startTime || '09:00',
+        endTime: doctor.endTime || '17:00',
+        morningStartTime: doctor.morningStartTime || '09:00',
+        morningEndTime: doctor.morningEndTime || '12:00',
+        eveningStartTime: doctor.eveningStartTime || '17:00',
+        eveningEndTime: doctor.eveningEndTime || '20:00'
       };
     })
   );
@@ -297,17 +593,34 @@ export default function AdminDoctors() {
       }
 
       // Then create doctor document with userId reference
+      // Handle both 'assistants' and 'assignedAssistants' field names for compatibility
+      const assistants = doctorData.assistants || doctorData.assignedAssistants || [];
+      
+      console.log('Creating doctor with assistants:', assistants);
+      console.log('Doctor data received:', doctorData);
+      
       const doctorDoc = {
         userId: userResult.id, // Reference to the user document
         specialty: doctorData.specialty,
-        consultationDuration: doctorData.consultationDuration || 30,
+        consultationDuration: parseInt(doctorData.slotDuration) || 20,
         rating: 0,
         availability: {},
         isActive: true,
         status: doctorData.status || 'Out',
+        room: doctorData.room || null,
+        startTime: doctorData.startTime || '09:00',
+        endTime: doctorData.endTime || '17:00',
+        morningStartTime: doctorData.morningStartTime || '09:00',
+        morningEndTime: doctorData.morningEndTime || '12:00',
+        eveningStartTime: doctorData.eveningStartTime || '17:00',
+        eveningEndTime: doctorData.eveningEndTime || '20:00',
+        schedule: doctorData.schedule || `${doctorData.morningStartTime || '09:00'} - ${doctorData.eveningEndTime || '20:00'}`,
+        assignedAssistants: assistants,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
+      
+      console.log('Doctor document to create:', doctorDoc);
 
       const doctorResult = await createDocument('doctors', doctorDoc);
       
@@ -351,7 +664,35 @@ export default function AdminDoctors() {
     
     setIsLoading(true);
     try {
-      const result = await updateDoctor(selectedDoctor.id, doctorData);
+      // Handle both 'assistants' and 'assignedAssistants' field names for compatibility
+      const assistants = doctorData.assistants || doctorData.assignedAssistants;
+      
+      // Prepare update data with all fields
+      const updateData: any = {
+        specialty: doctorData.specialty,
+        slotDuration: doctorData.slotDuration,
+        status: doctorData.status || 'Out',
+        room: doctorData.room || null,
+        startTime: doctorData.startTime || '09:00',
+        endTime: doctorData.endTime || '17:00',
+        morningStartTime: doctorData.morningStartTime || '09:00',
+        morningEndTime: doctorData.morningEndTime || '12:00',
+        eveningStartTime: doctorData.eveningStartTime || '17:00',
+        eveningEndTime: doctorData.eveningEndTime || '20:00',
+      };
+
+      // Include assistants if provided
+      if (assistants !== undefined) {
+        updateData.assignedAssistants = assistants;
+        console.log('Updating doctor with assistants:', assistants);
+      }
+
+      // Include name, email, phone if they exist (for user document update)
+      if (doctorData.name) updateData.name = doctorData.name;
+      if (doctorData.email) updateData.email = doctorData.email;
+      if (doctorData.phone) updateData.phone = doctorData.phone;
+
+      const result = await updateDoctor(selectedDoctor.id, updateData);
       
       if (result.success) {
         Alert.alert('Success', 'Doctor updated successfully!');

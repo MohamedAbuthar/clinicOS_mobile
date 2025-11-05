@@ -55,66 +55,73 @@ const AppointmentTrendsChart: React.FC<AppointmentTrendsChartProps> = ({ data })
 
         {/* Chart area */}
         <View style={styles.chartArea}>
-          <View style={styles.chart}>
-            {data.map((item, index) => {
-              const barWidth = Math.max(20, (width - 120) / data.length);
-              return (
-                <View key={index} style={[styles.barGroup, { width: barWidth }]}>
-                  {/* Total bar */}
-                  <View style={styles.singleBarContainer}>
-                    <View
-                      style={[
-                        styles.bar,
-                        {
-                          height: (item.total / maxValue) * chartHeight || 2,
-                          backgroundColor: '#14b8a6',
-                        },
-                      ]}
-                    />
+          <View style={styles.chartWrapper}>
+            <View style={styles.chart}>
+              {data.map((item, index) => {
+                const barWidth = Math.max(20, (width - 120) / data.length);
+                return (
+                  <View key={index} style={[styles.barGroup, { width: barWidth }]}>
+                    {/* Total bar */}
                     {item.total > 0 && (
-                      <ThemedText style={styles.barValue}>{item.total}</ThemedText>
+                      <View style={styles.singleBarContainer}>
+                        <View
+                          style={[
+                            styles.bar,
+                            {
+                              height: (item.total / maxValue) * chartHeight,
+                              backgroundColor: '#14b8a6',
+                            },
+                          ]}
+                        />
+                      </View>
                     )}
-                  </View>
 
-                  {/* Completed bar */}
-                  <View style={styles.singleBarContainer}>
-                    <View
-                      style={[
-                        styles.bar,
-                        {
-                          height: (item.completed / maxValue) * chartHeight || 2,
-                          backgroundColor: '#22c55e',
-                        },
-                      ]}
-                    />
+                    {/* Completed bar */}
                     {item.completed > 0 && (
-                      <ThemedText style={styles.barValue}>{item.completed}</ThemedText>
+                      <View style={styles.singleBarContainer}>
+                        <View
+                          style={[
+                            styles.bar,
+                            {
+                              height: (item.completed / maxValue) * chartHeight,
+                              backgroundColor: '#22c55e',
+                            },
+                          ]}
+                        />
+                      </View>
                     )}
-                  </View>
 
-                  {/* Cancelled bar */}
-                  <View style={styles.singleBarContainer}>
-                    <View
-                      style={[
-                        styles.bar,
-                        {
-                          height: (item.cancelled / maxValue) * chartHeight || 2,
-                          backgroundColor: '#ef4444',
-                        },
-                      ]}
-                    />
+                    {/* Cancelled bar */}
                     {item.cancelled > 0 && (
-                      <ThemedText style={styles.barValue}>{item.cancelled}</ThemedText>
+                      <View style={styles.singleBarContainer}>
+                        <View
+                          style={[
+                            styles.bar,
+                            {
+                              height: (item.cancelled / maxValue) * chartHeight,
+                              backgroundColor: '#ef4444',
+                            },
+                          ]}
+                        />
+                      </View>
                     )}
                   </View>
-
-                  {/* Day label */}
-                  <ThemedText style={styles.dayLabel} numberOfLines={1}>
-                    {item.day}
-                  </ThemedText>
-                </View>
-              );
-            })}
+                );
+              })}
+            </View>
+            {/* X-axis labels at bottom */}
+            <View style={styles.xAxisContainer}>
+              {data.map((item, index) => {
+                const barWidth = Math.max(20, (width - 120) / data.length);
+                return (
+                  <View key={index} style={[styles.xAxisLabelContainer, { width: barWidth }]}>
+                    <ThemedText style={styles.dayLabel} numberOfLines={1}>
+                      {item.day}
+                    </ThemedText>
+                  </View>
+                );
+              })}
+            </View>
           </View>
         </View>
       </View>
@@ -173,9 +180,11 @@ const styles = StyleSheet.create({
   },
   yAxisContainer: {
     width: 30,
+    height: 200,
     justifyContent: 'space-between',
     paddingRight: 8,
-    marginTop: -8,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
   yAxisLabel: {
     fontSize: 10,
@@ -185,6 +194,9 @@ const styles = StyleSheet.create({
   chartArea: {
     flex: 1,
     overflow: 'hidden',
+  },
+  chartWrapper: {
+    flexDirection: 'column',
   },
   chart: {
     flexDirection: 'row',
@@ -199,25 +211,31 @@ const styles = StyleSheet.create({
   },
   singleBarContainer: {
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 0,
   },
   bar: {
     width: 10,
     borderRadius: 2,
-    minHeight: 2,
   },
-  barValue: {
-    fontSize: 9,
-    color: '#1F2937',
-    fontWeight: '600',
-    marginTop: 2,
+  xAxisContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginTop: 0,
+    height: 20,
+    alignItems: 'flex-start',
+  },
+  xAxisLabelContainer: {
+    alignItems: 'center',
+    marginHorizontal: 2,
+    justifyContent: 'flex-start',
   },
   dayLabel: {
     fontSize: 11,
     color: '#6B7280',
     fontWeight: '500',
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 0,
   },
   legend: {
     flexDirection: 'row',
