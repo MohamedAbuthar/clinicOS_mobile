@@ -1,4 +1,5 @@
 import { AdminSidebar } from '@/components/AdminSidebar';
+import EmergencyAppointmentModal from '@/components/EmergencyAppointmentModal';
 import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { getDocuments } from '@/lib/firebase/firestore';
@@ -188,6 +189,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
 
   // Navigation handlers
   const handleNavigate = (path: string) => {
@@ -217,30 +219,30 @@ export default function AdminDashboard() {
           router.replace('/auth-login');
           return;
         }
-        
+
         if (user) {
-          
+
           console.log('Admin Dashboard - User:', user, 'Role:', user.role);
-          
+
           // Load appointments for today
           const appointmentsResult = await getDocuments('appointments', [
             where('appointmentDate', '==', new Date().toISOString().split('T')[0])
           ]);
-          
+
           // Load doctors
           const doctorsResult = await getDocuments('doctors');
-          
+
           // Load assistants (needed for assistant role filtering)
           const assistantsResult = await getDocuments('assistants');
-          
+
           console.log('Admin Dashboard - Appointments Result:', appointmentsResult);
           console.log('Admin Dashboard - Doctors Result:', doctorsResult);
-          
+
           // Use data if available, otherwise use fallback
           let appointments = appointmentsResult.success ? appointmentsResult.data : [];
           const doctorsData = doctorsResult.success ? doctorsResult.data : [];
           const assistantsData = assistantsResult.success ? assistantsResult.data : [];
-          
+
           // Apply role-based filtering to doctors
           let filteredDoctors = doctorsData;
           if (user.role === 'doctor') {
@@ -251,7 +253,7 @@ export default function AdminDashboard() {
             // Assistant sees only their assigned doctors
             const assistant = assistantsData.find((a: any) => a.userId === user.id);
             if (assistant && (assistant as any).assignedDoctors) {
-              filteredDoctors = doctorsData.filter((doctor: any) => 
+              filteredDoctors = doctorsData.filter((doctor: any) =>
                 (assistant as any).assignedDoctors.includes(doctor.id)
               );
               console.log('Assistant role - Assigned doctors:', (assistant as any).assignedDoctors);
@@ -262,7 +264,7 @@ export default function AdminDashboard() {
             }
           }
           // Admin sees all doctors (no filtering)
-          
+
           // Apply role-based filtering to appointments
           if (user.role === 'doctor') {
             // Doctor sees only their own appointments
@@ -276,7 +278,7 @@ export default function AdminDashboard() {
             // Assistant sees appointments for their assigned doctors
             const assistant = assistantsData.find((a: any) => a.userId === user.id);
             if (assistant && (assistant as any).assignedDoctors) {
-              appointments = appointments.filter((apt: any) => 
+              appointments = appointments.filter((apt: any) =>
                 (assistant as any).assignedDoctors.includes(apt.doctorId)
               );
             } else {
@@ -284,18 +286,18 @@ export default function AdminDashboard() {
             }
           }
           // Admin sees all appointments (no filtering)
-          
+
           if (appointments.length >= 0 && filteredDoctors.length >= 0) {
-            
+
             // Calculate dashboard metrics
             const appointmentsToday = appointments.length;
-            const patientsWaiting = appointments.filter((apt: any) => 
+            const patientsWaiting = appointments.filter((apt: any) =>
               apt.status === 'scheduled' || apt.status === 'confirmed'
             ).length;
-            const doctorsActive = filteredDoctors.filter((doctor: any) => 
+            const doctorsActive = filteredDoctors.filter((doctor: any) =>
               doctor.status === 'In'
             ).length;
-            const noShows = appointments.filter((apt: any) => 
+            const noShows = appointments.filter((apt: any) =>
               apt.status === 'no_show'
             ).length;
 
@@ -451,6 +453,17 @@ export default function AdminDashboard() {
             <ThemedText style={styles.headerTitle}>Dashboard</ThemedText>
             <ThemedText style={styles.headerSubtitle}>Quick overview of today clinic operations</ThemedText>
           </View>
+
+          {/* Emergency Button - Only for doctor, admin, assistant */}
+          {user && (user.role === 'doctor' || user.role === 'admin' || user.role === 'assistant') && (
+            <TouchableOpacity
+              style={styles.emergencyButton}
+              onPress={() => setShowEmergencyModal(true)}
+            >
+              <AlertCircle />
+              <ThemedText style={styles.emergencyButtonText}>Emergency</ThemedText>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Stats Cards */}
@@ -496,8 +509,7 @@ export default function AdminDashboard() {
           </View>
         </View>
       </ScrollView>
-      
-      {/* Admin Sidebar */}
+
       <AdminSidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -506,6 +518,16 @@ export default function AdminDashboard() {
         onLogout={handleLogout}
         userName={user?.name || 'Admin User'}
         userRole={user?.role || 'Administrator'}
+      />
+
+      <EmergencyAppointmentModal
+        visible={showEmergencyModal}
+        onClose={() => setShowEmergencyModal(false)}
+        doctors={doctors}
+        onAppointmentCreated={() => {
+          // Ideally refresh dashboard data
+          setShowEmergencyModal(false);
+        }}
       />
     </SafeAreaView>
   );
@@ -747,5 +769,19 @@ const styles = StyleSheet.create({
   alertTimestamp: {
     fontSize: 12,
     color: '#6B7280',
+  },
+  emergencyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  emergencyButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 12,
   },
 });
