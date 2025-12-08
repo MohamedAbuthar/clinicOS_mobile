@@ -4,12 +4,12 @@ import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog'
 import { EditAssistantDialog } from '@/components/EditAssistantDialog';
 import { PaginationComponent } from '@/components/PaginationComponent';
 import { ThemedText } from '@/components/themed-text';
-import { getCurrentUser } from '@/lib/firebase/auth';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { createDocument, deleteDocument, getAllDoctors, getDocument, getDocuments, updateDocument } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import { Edit, Trash2, Users } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 
@@ -46,15 +46,15 @@ const UserPlus = () => (
 
 export default function AdminAssistants() {
   const router = useRouter();
+  const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedAssistant, setSelectedAssistant] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [assistants, setAssistants] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
-  const [user, setUser] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage] = useState<number>(6);
 
@@ -62,10 +62,7 @@ export default function AdminAssistants() {
   useEffect(() => {
     const loadAssistants = async () => {
       try {
-        const currentUser = getCurrentUser();
-        if (currentUser) {
-          setUser(currentUser);
-          
+        if (user) {
           // Load assistants collection to get assigned doctors
           const assistantsResult = await getDocuments('assistants');
           console.log('Admin Assistants - Assistants Collection Result:', assistantsResult);
@@ -140,19 +137,34 @@ export default function AdminAssistants() {
             }));
             setDoctors(formattedDoctors);
           }
+          setIsLoading(false);
         } else {
           router.push('/auth-login');
         }
       } catch (error) {
         console.error('Error loading assistants:', error);
         Alert.alert('Error', 'Failed to load assistants data');
+        setIsLoading(false);
       }
     };
 
-    loadAssistants();
-  }, [router]);
+    if (user) {
+      loadAssistants();
+    }
+  }, [user, router]);
 
-  const handleLogout = () => router.push('/auth-login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // Wait a moment for auth state to clear before navigating
+      setTimeout(() => {
+        router.replace('/auth-login');
+      }, 100);
+    } catch (error) {
+      console.error('Logout error:', error);
+      Alert.alert('Error', 'Failed to logout');
+    }
+  };
   const handleNavigate = (path: string) => router.push(path as any);
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const closeSidebar = () => setSidebarOpen(false);
@@ -310,6 +322,22 @@ export default function AdminAssistants() {
       const userResult = await updateDocument('users', selectedAssistant.id, userUpdateData);
       
       if (userResult.success) {
+        // Update assistant document with assigned doctors
+        if (selectedAssistant.assistantId) {
+          const assistantUpdateData = {
+            assignedDoctors: assistantData.assignedDoctors || [],
+            isActive: assistantData.status === 'active',
+            updatedAt: new Date(),
+          };
+          
+          const assistantResult = await updateDocument('assistants', selectedAssistant.assistantId, assistantUpdateData);
+          
+          if (!assistantResult.success) {
+            console.error('Failed to update assistant document:', assistantResult.error);
+            Alert.alert('Warning', 'User updated but doctor assignments may not have been saved. Please try again.');
+          }
+        }
+        
         Alert.alert('Success', 'Assistant updated successfully!');
         setIsEditDialogOpen(false);
         setSelectedAssistant(null);
@@ -482,12 +510,18 @@ export default function AdminAssistants() {
         currentPath="/admin-assistants"
         onNavigate={handleNavigate}
         onLogout={handleLogout}
-        userName="Admin User"
-        userRole="Administrator"
+        userName={user?.name || 'Admin User'}
+        userRole={user?.role || 'Administrator'}
       />
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.content}>
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#14B8A6" />
+          <ThemedText style={styles.loadingText}>Loading assistants...</ThemedText>
+        </View>
+      ) : (
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+          <View style={styles.content}>
           {/* Assistant Cards */}
           <View style={styles.assistantsList}>
             {getPaginatedAssistants(assistants).map((assistant) => (
@@ -566,6 +600,7 @@ export default function AdminAssistants() {
           />
         </View>
       </ScrollView>
+      )}
 
       {/* Add Assistant Dialog */}
       <AddAssistantDialog
@@ -649,6 +684,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
   },
   scrollView: { 
     flex: 1 

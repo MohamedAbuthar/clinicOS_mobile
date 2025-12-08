@@ -5,12 +5,12 @@ import { EditDoctorDialog } from '@/components/EditDoctorDialog';
 import { PaginationComponent } from '@/components/PaginationComponent';
 import { ThemedText } from '@/components/themed-text';
 import { ViewDoctorDialog } from '@/components/ViewDoctorDialog';
-import { getCurrentUser } from '@/lib/firebase/auth';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { createDocument, deleteDoctor, getAllDoctors, getAppointmentsByDoctorAndDate, getDocuments, updateDoctor } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import { Clock, Edit, Eye, Trash2, Users } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 
@@ -453,15 +453,15 @@ const transformDoctorData = async (doctors: any[]) => {
 
 export default function AdminDoctors() {
   const router = useRouter();
+  const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedDoctor, setSelectedDoctor] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [doctors, setDoctors] = useState<any[]>([]);
-  const [user, setUser] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage] = useState<number>(10);
 
@@ -469,10 +469,7 @@ export default function AdminDoctors() {
   useEffect(() => {
     const loadDoctors = async () => {
       try {
-        const currentUser = getCurrentUser();
-        if (currentUser) {
-          setUser(currentUser);
-          
+        if (user) {
           const doctorsResult = await getAllDoctors();
           console.log('Admin Doctors - Doctors Result:', doctorsResult);
           if (doctorsResult.success && doctorsResult.data) {
@@ -543,20 +540,33 @@ export default function AdminDoctors() {
             ];
             setDoctors(fallbackDoctors);
           }
+          setIsLoading(false);
         } else {
           router.push('/auth-login');
         }
       } catch (error) {
         console.error('Error loading doctors:', error);
         Alert.alert('Error', 'Failed to load doctors data');
+        setIsLoading(false);
       }
     };
 
-    loadDoctors();
-  }, [router]);
+    if (user) {
+      loadDoctors();
+    }
+  }, [user, router]);
 
-  const handleLogout = () => {
-    router.push('/auth-login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // Wait a moment for auth state to clear before navigating
+      setTimeout(() => {
+        router.replace('/auth-login');
+      }, 100);
+    } catch (error) {
+      console.error('Logout error:', error);
+      Alert.alert('Error', 'Failed to logout');
+    }
   };
 
   const handleNavigate = (path: string) => {
@@ -809,11 +819,17 @@ export default function AdminDoctors() {
         currentPath="/admin-doctors"
         onNavigate={handleNavigate}
         onLogout={handleLogout}
-        userName="Admin User"
-        userRole="Administrator"
+        userName={user?.name || 'Admin User'}
+        userRole={user?.role || 'Administrator'}
       />
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#14B8A6" />
+          <ThemedText style={styles.loadingText}>Loading doctors...</ThemedText>
+        </View>
+      ) : (
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           {/* Doctor Cards */}
           <View style={styles.doctorsGrid}>
@@ -920,6 +936,7 @@ export default function AdminDoctors() {
           />
         </View>
       </ScrollView>
+      )}
 
       {/* Add Doctor Dialog */}
       <AddDoctorDialog
@@ -1016,6 +1033,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
   },
   scrollView: {
     flex: 1,

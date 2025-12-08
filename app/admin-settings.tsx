@@ -1,13 +1,13 @@
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { ThemedText } from '@/components/themed-text';
-import { getCurrentUser, signOut } from '@/lib/firebase/auth';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { db } from '@/lib/firebase/config';
 import { getDocument } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import { collection, getDocs, limit, orderBy, query, Timestamp } from 'firebase/firestore';
 import { AlertCircle, RefreshCw, Shield, User } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { Alert, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 
@@ -25,10 +25,12 @@ const Menu = () => (
 
 export default function AdminSettings() {
   const router = useRouter();
+  const { user: authUser, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -37,10 +39,9 @@ export default function AdminSettings() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const currentUser = getCurrentUser();
-        if (currentUser) {
+        if (authUser) {
           // Load user profile from Firestore
-          const userResult = await getDocument('users', currentUser.uid);
+          const userResult = await getDocument('users', authUser.id);
           if (userResult.success && userResult.data) {
             setUser(userResult.data);
           } else {
@@ -92,21 +93,33 @@ export default function AdminSettings() {
             // Set empty array if audit logs fail to load
             setAuditLogs([]);
           }
+          setIsInitialLoading(false);
         } else {
           router.push('/auth-login');
         }
       } catch (error) {
         console.error('Error loading settings data:', error);
         setError('Failed to load settings data');
+        setIsInitialLoading(false);
       }
     };
 
-    loadData();
-  }, [router]);
+    if (authUser) {
+      loadData();
+    }
+  }, [authUser, router]);
 
   const handleLogout = async () => {
-    await signOut();
-    router.push('/auth-login');
+    try {
+      await logout();
+      // Wait a moment for auth state to clear before navigating
+      setTimeout(() => {
+        router.replace('/auth-login');
+      }, 100);
+    } catch (error) {
+      console.error('Logout error:', error);
+      Alert.alert('Error', 'Failed to logout');
+    }
   };
   
   const handleNavigate = (path: string) => router.push(path as any);
@@ -117,9 +130,8 @@ export default function AdminSettings() {
     setRefreshing(true);
     try {
       // Refresh user data from Firestore
-      const currentUser = getCurrentUser();
-      if (currentUser) {
-        const userResult = await getDocument('users', currentUser.uid);
+      if (authUser) {
+        const userResult = await getDocument('users', authUser.id);
         if (userResult.success && userResult.data) {
           setUser(userResult.data);
         }
@@ -230,17 +242,23 @@ export default function AdminSettings() {
         currentPath="/admin-settings"
         onNavigate={handleNavigate}
         onLogout={handleLogout}
-        userName="Admin User"
-        userRole="Administrator"
+        userName={authUser?.name || 'Admin User'}
+        userRole={authUser?.role || 'Administrator'}
       />
 
-      <ScrollView 
-        style={styles.scrollView} 
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-      >
+      {isInitialLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#14B8A6" />
+          <ThemedText style={styles.loadingText}>Loading settings...</ThemedText>
+        </View>
+      ) : (
+        <ScrollView 
+          style={styles.scrollView} 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+        >
         <View style={styles.content}>
           {/* Success Message */}
           {successMessage && (
@@ -303,6 +321,7 @@ export default function AdminSettings() {
           </View>
         </View>
       </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -356,6 +375,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
   },
   scrollView: {
     flex: 1,

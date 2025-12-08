@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 import { ThemedText } from './themed-text';
 
@@ -173,12 +174,12 @@ interface AdminSidebarProps {
 
 const SIDEBAR_WIDTH = 280;
 
-export function AdminSidebar({ 
-  isOpen, 
-  onClose, 
-  currentPath, 
-  onNavigate, 
-  onLogout, 
+export function AdminSidebar({
+  isOpen,
+  onClose,
+  currentPath,
+  onNavigate,
+  onLogout,
   userName = 'Admin User',
   userRole = 'Administrator'
 }: AdminSidebarProps) {
@@ -220,68 +221,70 @@ export function AdminSidebar({
   return (
     <View style={styles.overlayContainer}>
       {/* Backdrop */}
-      <TouchableOpacity 
-        style={styles.backdrop} 
-        activeOpacity={1} 
+      <TouchableOpacity
+        style={styles.backdrop}
+        activeOpacity={1}
         onPress={onClose}
       />
-      
+
       {/* Sidebar */}
       <Animated.View style={[styles.sidebar, { transform: [{ translateX: slideAnim }] }]}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <View style={styles.logoIcon}>
-              <Activity />
-            </View>
-            <View>
-              <ThemedText style={styles.logoText}>ClinicOS</ThemedText>
-              <ThemedText style={styles.logoSubtext}>Admin Portal</ThemedText>
+        <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1 }}>
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.logoContainer}>
+              <View style={styles.logoIcon}>
+                <Activity />
+              </View>
+              <View>
+                <ThemedText style={styles.logoText}>ClinicOS</ThemedText>
+                <ThemedText style={styles.logoSubtext}>Admin Portal</ThemedText>
+              </View>
             </View>
           </View>
-        </View>
 
-        {/* Navigation Menu */}
-        <View style={styles.navigation}>
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = currentPath === item.path;
-            
-            return (
-              <TouchableOpacity
-                key={item.label}
-                style={[styles.menuItem, isActive && styles.activeMenuItem]}
-                onPress={() => {
-                  onNavigate(item.path);
-                  onClose();
-                }}
-              >
-                <Icon />
-                <ThemedText style={[styles.menuText, isActive && styles.activeMenuText]}>
-                  {item.label}
+          {/* Navigation Menu */}
+          <View style={styles.navigation}>
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = currentPath === item.path;
+
+              return (
+                <TouchableOpacity
+                  key={item.label}
+                  style={[styles.menuItem, isActive && styles.activeMenuItem]}
+                  onPress={() => {
+                    onNavigate(item.path);
+                    onClose();
+                  }}
+                >
+                  <Icon />
+                  <ThemedText style={[styles.menuText, isActive && styles.activeMenuText]}>
+                    {item.label}
+                  </ThemedText>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* User Profile */}
+          <View style={styles.userProfile}>
+            <View style={styles.userInfo}>
+              <View style={styles.userAvatar}>
+                <ThemedText style={styles.userInitial}>
+                  {userName.charAt(0).toUpperCase()}
                 </ThemedText>
+              </View>
+              <View style={styles.userDetails}>
+                <ThemedText style={styles.userName}>{userName}</ThemedText>
+                <ThemedText style={styles.userRole}>{userRole}</ThemedText>
+              </View>
+              <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
+                <LogOut />
               </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* User Profile */}
-        <View style={styles.userProfile}>
-          <View style={styles.userInfo}>
-            <View style={styles.userAvatar}>
-              <ThemedText style={styles.userInitial}>
-                {userName.charAt(0).toUpperCase()}
-              </ThemedText>
             </View>
-            <View style={styles.userDetails}>
-              <ThemedText style={styles.userName}>{userName}</ThemedText>
-              <ThemedText style={styles.userRole}>{userRole}</ThemedText>
-            </View>
-            <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
-              <LogOut />
-            </TouchableOpacity>
           </View>
-        </View>
+        </SafeAreaView>
       </Animated.View>
     </View>
   );
