@@ -2,11 +2,12 @@ import { AddOverrideDialog } from '@/components/AddOverrideDialog';
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { EditOverrideDialog } from '@/components/EditOverrideDialog';
 import { ThemedText } from '@/components/themed-text';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { getCurrentUser } from '@/lib/firebase/auth';
 import { createScheduleOverride, deleteScheduleOverride, getAllDoctors, getDocument, getScheduleOverrides, updateScheduleOverride } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 
@@ -165,6 +166,7 @@ interface HolidayData {
 
 export default function AdminSchedule() {
   const router = useRouter();
+  const { logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAddHolidayDialogOpen, setIsAddHolidayDialogOpen] = useState(false);
   const [isEditOverrideDialogOpen, setIsEditOverrideDialogOpen] = useState(false);
@@ -175,6 +177,7 @@ export default function AdminSchedule() {
   const [holidays, setHolidays] = useState<HolidayData[]>([]);
   const [user, setUser] = useState<any>(null);
   const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   // Load doctors data
   useEffect(() => {
@@ -227,12 +230,14 @@ export default function AdminSchedule() {
               setSelectedDoctor(transformedDoctors[0].id);
             }
           }
+          setIsInitialLoading(false);
         } else {
           router.push('/auth-login');
         }
       } catch (error) {
         console.error('Error loading doctors:', error);
         Alert.alert('Error', 'Failed to load doctors data');
+        setIsInitialLoading(false);
       }
     };
 
@@ -286,8 +291,16 @@ export default function AdminSchedule() {
     }
   };
 
-  const handleLogout = () => {
-    router.push('/auth-login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // Wait a moment for auth state to clear before navigating
+      setTimeout(() => {
+        router.replace('/auth-login');
+      }, 100);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const handleNavigate = (path: string) => {
@@ -742,7 +755,13 @@ export default function AdminSchedule() {
         userRole={user?.role || 'Administrator'}
       />
 
-      <ScrollView 
+      {isInitialLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#14B8A6" />
+          <ThemedText style={styles.loadingText}>Loading schedule...</ThemedText>
+        </View>
+      ) : (
+        <ScrollView 
         style={styles.scrollView} 
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -826,6 +845,7 @@ export default function AdminSchedule() {
           </View>
         </View>
       </ScrollView>
+      )}
 
       {/* Doctor Selection Modal */}
       <Modal
@@ -947,6 +967,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
   },
   scrollView: {
     flex: 1,

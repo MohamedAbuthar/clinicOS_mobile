@@ -2,27 +2,27 @@ import { AddAppointmentDialog } from '@/components/AddAppointmentDialog';
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { PaginationComponent } from '@/components/PaginationComponent';
 import { ThemedText } from '@/components/themed-text';
-import { getCurrentUser } from '@/lib/firebase/auth';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { createAppointment, createPatient, getAllDoctors, getDocuments } from '@/lib/firebase/firestore';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { Calendar, FileText, Filter, Hash, Menu, Plus, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { Alert, Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Custom SVG Components (if needed)
 
 export default function AdminAppointments() {
   const router = useRouter();
+  const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [filteredAppointments, setFilteredAppointments] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
-  const [user, setUser] = useState<any>(null);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -59,10 +59,7 @@ export default function AdminAppointments() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const currentUser = getCurrentUser();
-        if (currentUser) {
-          setUser(currentUser);
-          
+        if (user) {
           // Load doctors first
           const doctorsResult = await getAllDoctors();
           console.log('Admin Appointments - Doctors Result:', doctorsResult);
@@ -154,20 +151,33 @@ export default function AdminAppointments() {
             // Don't show any appointments initially - only show when doctor is selected
             setFilteredAppointments([]);
           }
+          setIsLoading(false);
         } else {
           router.push('/auth-login');
         }
       } catch (error) {
         console.error('Error loading data:', error);
         Alert.alert('Error', 'Failed to load appointments data');
+        setIsLoading(false);
       }
     };
 
-    loadData();
-  }, [router]);
+    if (user) {
+      loadData();
+    }
+  }, [user, router]);
 
-  const handleLogout = () => {
-    router.push('/auth-login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // Wait a moment for auth state to clear before navigating
+      setTimeout(() => {
+        router.replace('/auth-login');
+      }, 100);
+    } catch (error) {
+      console.error('Logout error:', error);
+      Alert.alert('Error', 'Failed to logout');
+    }
   };
 
   const handleNavigate = (path: string) => {
@@ -713,11 +723,17 @@ export default function AdminAppointments() {
         currentPath="/admin-appointments"
         onNavigate={handleNavigate}
         onLogout={handleLogout}
-        userName="Admin User"
-        userRole="Administrator"
+        userName={user?.name || 'Admin User'}
+        userRole={user?.role || 'Administrator'}
       />
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#14B8A6" />
+          <ThemedText style={styles.loadingText}>Loading appointments...</ThemedText>
+        </View>
+      ) : (
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           {/* Empty State - No Doctor Selected */}
           {!selectedDoctor && (
@@ -818,6 +834,7 @@ export default function AdminAppointments() {
           )}
         </View>
       </ScrollView>
+      )}
 
       {/* Add Appointment Dialog */}
       <AddAppointmentDialog
@@ -1123,6 +1140,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   viewDetail: { color: '#111827', fontSize: 14 },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
+  },
   scrollView: {
     flex: 1,
   },

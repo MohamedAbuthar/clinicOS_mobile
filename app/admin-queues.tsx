@@ -240,7 +240,10 @@ export default function AdminQueues() {
   const handleLogout = async () => {
     try {
       await logout();
-      router.replace('/auth-login');
+      // Wait a moment for auth state to clear before navigating
+      setTimeout(() => {
+        router.replace('/auth-login');
+      }, 100);
     } catch (error) {
       Alert.alert('Error', 'Failed to logout');
     }

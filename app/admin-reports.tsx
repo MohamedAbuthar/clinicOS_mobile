@@ -1,6 +1,7 @@
 import { AdminSidebar } from '@/components/AdminSidebar';
 import AppointmentTrendsChart, { AppointmentData } from '@/components/charts/AppointmentTrendsChart';
 import { ThemedText } from '@/components/themed-text';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { getCurrentUser } from '@/lib/firebase/auth';
 import { getDocument, getDocuments } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
@@ -26,6 +27,7 @@ type TimeRange = 'today' | 'thisWeek' | 'thisMonth';
 
 export default function AdminReports() {
   const router = useRouter();
+  const { logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>('thisWeek');
   const [showTimeRangeDropdown, setShowTimeRangeDropdown] = useState(false);
@@ -90,7 +92,17 @@ export default function AdminReports() {
     loadData();
   }, [router]);
 
-  const handleLogout = () => router.push('/auth-login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // Wait a moment for auth state to clear before navigating
+      setTimeout(() => {
+        router.replace('/auth-login');
+      }, 100);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
   const handleNavigate = (path: string) => router.push(path as any);
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const closeSidebar = () => setSidebarOpen(false);

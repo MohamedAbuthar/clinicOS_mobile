@@ -1,5 +1,6 @@
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { ThemedText } from '@/components/themed-text';
+import { useAuth } from '@/lib/contexts/AuthContext';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -45,10 +46,19 @@ const Plus = () => (
 
 export default function AdminAppointment() {
   const router = useRouter();
+  const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const handleLogout = () => {
-    router.push('/auth-login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // Wait a moment for auth state to clear before navigating
+      setTimeout(() => {
+        router.replace('/auth-login');
+      }, 100);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const handleNavigate = (path: string) => {
@@ -89,8 +99,8 @@ export default function AdminAppointment() {
         currentPath="/admin-appointment"
         onNavigate={handleNavigate}
         onLogout={handleLogout}
-        userName="Admin User"
-        userRole="Administrator"
+        userName={user?.name || 'Admin User'}
+        userRole={user?.role || 'Administrator'}
       />
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>

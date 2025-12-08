@@ -2,7 +2,7 @@ import { AdminSidebar } from '@/components/AdminSidebar';
 import EmergencyAppointmentModal from '@/components/EmergencyAppointmentModal';
 import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { getDocuments } from '@/lib/firebase/firestore';
+import { getAppointmentsByDoctorAndDate, getDocuments } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import { where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
@@ -200,7 +200,10 @@ export default function AdminDashboard() {
   const handleLogout = async () => {
     try {
       await logout();
-      router.replace('/auth-login');
+      // Wait a moment for auth state to clear before navigating
+      setTimeout(() => {
+        router.replace('/auth-login');
+      }, 100);
     } catch (error) {
       console.error('Logout error:', error);
       Alert.alert('Error', 'Failed to logout');
@@ -308,16 +311,36 @@ export default function AdminDashboard() {
               noShows,
             });
 
-            // Transform doctors data for display
-            const transformedDoctors = filteredDoctors.map((doctor: any) => ({
-              id: doctor.id,
-              name: doctor.user?.name || doctor.name || 'Unknown Doctor',
-              specialty: doctor.specialty || 'General',
-              currentToken: null,
-              queueLength: 0,
-              estimatedLastPatient: null,
-              status: doctor.status === 'In' ? 'Active' : 'Break'
-            }));
+            // Calculate queue length for each doctor
+            const today = new Date().toISOString().split('T')[0];
+            const transformedDoctors = await Promise.all(
+              filteredDoctors.map(async (doctor: any) => {
+                // Get appointments for this doctor for today
+                let queueLength = 0;
+                try {
+                  const doctorAppointmentsResult = await getAppointmentsByDoctorAndDate(doctor.id, today);
+                  if (doctorAppointmentsResult.success && doctorAppointmentsResult.data) {
+                    // Filter out completed and cancelled appointments
+                    const queueAppointments = doctorAppointmentsResult.data.filter((apt: any) => 
+                      apt.status !== 'completed' && apt.status !== 'cancelled'
+                    );
+                    queueLength = queueAppointments.length;
+                  }
+                } catch (error) {
+                  console.error(`Error fetching queue for doctor ${doctor.id}:`, error);
+                }
+
+                return {
+                  id: doctor.id,
+                  name: doctor.user?.name || doctor.name || 'Unknown Doctor',
+                  specialty: doctor.specialty || 'General',
+                  currentToken: null,
+                  queueLength: queueLength,
+                  estimatedLastPatient: null,
+                  status: doctor.status === 'In' ? 'Active' : 'Break'
+                };
+              })
+            );
 
             // If no doctors data, use fallback data matching web app
             if (transformedDoctors.length === 0 || transformedDoctors.every(d => d.name === 'Unknown Doctor')) {
