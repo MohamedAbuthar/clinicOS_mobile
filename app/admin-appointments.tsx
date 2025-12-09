@@ -34,7 +34,7 @@ export default function AdminAppointments() {
     today.setHours(0, 0, 0, 0);
     const selected = new Date(tempSelectedDate);
     selected.setHours(0, 0, 0, 0);
-    
+
     // If selected date is in the past, set to today
     if (selected < today) {
       setTempSelectedDate(today);
@@ -72,11 +72,11 @@ export default function AdminAppointments() {
             }));
             console.log('Formatted doctors:', formattedDoctors);
             setDoctors(formattedDoctors);
-            
+
             // Create a map for quick doctor lookup
             doctorsMap = new Map(formattedDoctors.map(doc => [doc.id, doc]));
           }
-          
+
           // Load patients
           const patientsResult = await getDocuments('patients');
           console.log('Admin Appointments - Patients Result:', patientsResult);
@@ -86,7 +86,7 @@ export default function AdminAppointments() {
             console.log('Admin Appointments - Failed to load patients');
             setPatients([]);
           }
-          
+
           // Load appointments and match with doctor names
           const appointmentsResult = await getDocuments('appointments');
           console.log('Admin Appointments - Appointments Result:', appointmentsResult);
@@ -96,7 +96,7 @@ export default function AdminAppointments() {
               // Find the doctor name from the doctors map
               const doctor = doctorsMap.get(appointment.doctorId);
               const doctorName = doctor ? doctor.name : 'Unknown Doctor';
-              
+
               return {
                 id: appointment.id,
                 patientName: appointment.patientName || 'Unknown Patient',
@@ -108,9 +108,9 @@ export default function AdminAppointments() {
                 status: appointment.status || 'scheduled',
                 tokenNumber: appointment.tokenNumber || 'N/A',
                 notes: appointment.notes || '',
-                statusColor: appointment.status === 'completed' ? '#10B981' : 
-                            appointment.status === 'confirmed' ? '#3B82F6' :
-                            appointment.status === 'scheduled' ? '#F59E0B' : '#6B7280'
+                statusColor: appointment.status === 'completed' ? '#10B981' :
+                  appointment.status === 'confirmed' ? '#3B82F6' :
+                    appointment.status === 'scheduled' ? '#F59E0B' : '#6B7280'
               };
             });
             setAppointments(transformedAppointments);
@@ -200,7 +200,7 @@ export default function AdminAppointments() {
       today.setHours(0, 0, 0, 0);
       const selected = new Date(selectedDate);
       selected.setHours(0, 0, 0, 0);
-      
+
       // Only allow current date or future dates
       if (selected >= today) {
         setTempSelectedDate(selectedDate);
@@ -339,15 +339,15 @@ export default function AdminAppointments() {
   // Filter appointments by date and doctor
   const filterAppointmentsByDateAndDoctor = (appointments: any[], date: string, doctorId: string) => {
     let filtered = appointments;
-    
+
     if (date) {
       filtered = filtered.filter(appointment => appointment.appointmentDate === date);
     }
-    
+
     if (doctorId) {
       filtered = filtered.filter(appointment => appointment.doctorId === doctorId);
     }
-    
+
     return filtered;
   };
 
@@ -403,9 +403,9 @@ export default function AdminAppointments() {
           status: appointment.status || 'scheduled',
           tokenNumber: appointment.tokenNumber || 'N/A',
           notes: appointment.notes || '',
-          statusColor: appointment.status === 'completed' ? '#10B981' : 
-                      appointment.status === 'confirmed' ? '#3B82F6' :
-                      appointment.status === 'scheduled' ? '#F59E0B' : '#6B7280'
+          statusColor: appointment.status === 'completed' ? '#10B981' :
+            appointment.status === 'confirmed' ? '#3B82F6' :
+              appointment.status === 'scheduled' ? '#F59E0B' : '#6B7280'
         }));
         setAppointments(transformedAppointments);
         // Only show appointments if doctor is selected
@@ -464,7 +464,7 @@ export default function AdminAppointments() {
 
   const handleAddAppointment = async (appointmentData: any) => {
     console.log('handleAddAppointment: Starting...', appointmentData);
-    
+
     if (!appointmentData.patientName || !appointmentData.phone || !appointmentData.doctor || !appointmentData.date || !appointmentData.time) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
@@ -475,7 +475,7 @@ export default function AdminAppointments() {
       // First, create or find patient
       let patientId = patients.find(p => p.phone === appointmentData.phone)?.id;
       console.log('Existing patient ID:', patientId);
-      
+
       if (!patientId) {
         console.log('Creating new patient...');
         // Create new patient - this returns the new patient's ID
@@ -486,16 +486,16 @@ export default function AdminAppointments() {
           dateOfBirth: '1990-01-01', // Default date
           gender: 'other' as const, // Default gender
         };
-        
+
         const newPatientId = await createPatient(newPatientData);
         console.log('Patient created with ID:', newPatientId);
-        
+
         if (!newPatientId) {
           Alert.alert('Error', 'Failed to create patient');
           setIsLoading(false);
           return;
         }
-        
+
         patientId = newPatientId;
       }
 
@@ -526,7 +526,7 @@ export default function AdminAppointments() {
 
       if (success.success) {
         Alert.alert('Success', 'Appointment created successfully');
-      setIsAddDialogOpen(false);
+        setIsAddDialogOpen(false);
         // Refresh the appointments list to show the new appointment
         await loadAppointments();
       } else {
@@ -553,7 +553,7 @@ export default function AdminAppointments() {
             <ThemedText style={styles.subtitle}>Manage all clinic appointments</ThemedText>
           </View>
         </View>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.addButton}
           onPress={() => setIsAddDialogOpen(true)}
           disabled={isLoading}
@@ -565,8 +565,8 @@ export default function AdminAppointments() {
 
       {/* Doctor Filter */}
       <View style={styles.filterSection}>
-        <TouchableOpacity 
-          style={styles.filterButton} 
+        <TouchableOpacity
+          style={styles.filterButton}
           onPress={() => setShowDoctorFilter(!showDoctorFilter)}
         >
           <Filter size={16} color="#6B7280" />
@@ -574,7 +574,7 @@ export default function AdminAppointments() {
             {selectedDoctor ? `Doctor: ${doctors.find(d => d.id === selectedDoctor)?.name || 'Unknown'}` : 'Filter by Doctor'}
           </ThemedText>
         </TouchableOpacity>
-        
+
         {showDoctorFilter && (
           <View style={styles.doctorFilterContainer}>
             <View style={styles.doctorInputContainer}>
@@ -610,8 +610,8 @@ export default function AdminAppointments() {
 
       {/* Date Filter */}
       <View style={styles.filterSection}>
-        <TouchableOpacity 
-          style={styles.filterButton} 
+        <TouchableOpacity
+          style={styles.filterButton}
           onPress={() => setShowDateFilter(!showDateFilter)}
         >
           <Filter size={16} color="#6B7280" />
@@ -619,14 +619,14 @@ export default function AdminAppointments() {
             {selectedDate ? `Filter: ${selectedDate}` : 'Filter by Date'}
           </ThemedText>
         </TouchableOpacity>
-        
+
         {showDateFilter && (
           <View style={styles.dateFilterContainer}>
             <View style={styles.dateInputContainer}>
               <Calendar size={16} color="#6B7280" />
               <ThemedText style={styles.dateInputLabel}>Select Date:</ThemedText>
               <View style={styles.dateInputRow}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.dateInput}
                   onPress={handleOpenDatePicker}
                 >
@@ -635,7 +635,7 @@ export default function AdminAppointments() {
                   </ThemedText>
                   <Calendar size={16} color="#6B7280" />
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.todayButton}
                   onPress={setTodayDate}
                 >
@@ -663,7 +663,7 @@ export default function AdminAppointments() {
           <View style={styles.datePickerContainer}>
             <View style={styles.datePickerHeader}>
               <ThemedText style={styles.datePickerTitle}>Select Date</ThemedText>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.datePickerClose}
                 onPress={() => setShowDatePicker(false)}
               >
@@ -680,20 +680,20 @@ export default function AdminAppointments() {
             />
             {Platform.OS === 'ios' && (
               <View style={styles.datePickerButtons}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.datePickerCancelButton}
                   onPress={() => setShowDatePicker(false)}
                 >
                   <ThemedText style={styles.datePickerCancelText}>Cancel</ThemedText>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.datePickerConfirmButton}
                   onPress={() => {
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
                     const selected = new Date(tempSelectedDate);
                     selected.setHours(0, 0, 0, 0);
-                    
+
                     // Only allow current date or future dates
                     const finalDate = selected >= today ? tempSelectedDate : today;
                     const dateString = finalDate.toISOString().split('T')[0];
@@ -734,106 +734,106 @@ export default function AdminAppointments() {
         </View>
       ) : (
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.content}>
-          {/* Empty State - No Doctor Selected */}
-          {!selectedDoctor && (
-            <View style={styles.emptyState}>
-              <ThemedText style={styles.emptyTitle}>Select Doctor to View Appointments</ThemedText>
-              <ThemedText style={styles.emptySubtitle}>
-                Please select a doctor from the filter above to view their appointments
-              </ThemedText>
-            </View>
-          )}
-
-          {/* Empty State - No Appointments Found */}
-          {selectedDoctor && filteredAppointments.length === 0 && (
-            <View style={styles.emptyState}>
-              <ThemedText style={styles.emptyTitle}>No Appointments Found</ThemedText>
-              <ThemedText style={styles.emptySubtitle}>
-                No appointments found for the selected doctor and date
-              </ThemedText>
-            </View>
-          )}
-
-          {/* Appointment Cards */}
-          {selectedDoctor && filteredAppointments.length > 0 && (
-            <View style={styles.appointmentsList}>
-              {getPaginatedAppointments(filteredAppointments).map((appointment) => (
-              <View key={appointment.id} style={styles.appointmentCard}>
-                <View style={styles.appointmentHeader}>
-                  <View style={styles.appointmentInfo}>
-                    <ThemedText style={styles.patientName}>
-                      {appointment.patientName}
-                    </ThemedText>
-                    <ThemedText style={styles.patientPhone}>
-                      {appointment.patientPhone}
-                    </ThemedText>
-                    <ThemedText style={styles.doctorName}>
-                      Dr. {appointment.doctorName}
-                    </ThemedText>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: appointment.statusColor }]}>
-                    <ThemedText style={styles.statusText}>{appointment.status}</ThemedText>
-                  </View>
-                </View>
-                
-                <View style={styles.appointmentDetails}>
-                  <View style={styles.detailRow}>
-                    <Calendar size={16} color="#6B7280" />
-                    <ThemedText style={styles.detailText}>
-                      {appointment.appointmentDate} at {appointment.appointmentTime}
-                    </ThemedText>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Hash size={16} color="#6B7280" />
-                    <ThemedText style={styles.detailText}>
-                      Token: #{Number(String(appointment.tokenNumber).replace(/^#/, '').replace(/^0+/, '')) || 0}
-                    </ThemedText>
-                  </View>
-                  {appointment.notes && (
-                    <View style={styles.detailRow}>
-                      <FileText size={16} color="#6B7280" />
-                      <ThemedText style={styles.detailText}>
-                        {appointment.notes}
-            </ThemedText>
-                    </View>
-                  )}
-                </View>
-                
-                <View style={styles.appointmentActions}>
-                  <TouchableOpacity 
-                    style={styles.actionButton}
-                    onPress={() => handleViewAppointment(appointment)}
-                  >
-                    <FileText size={16} color="#059669" />
-                    <ThemedText style={styles.actionText}>View</ThemedText>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.actionButton}
-                    onPress={() => handleDeleteAppointment(appointment.id)}
-                  >
-                    <Trash2 size={16} color="#DC2626" />
-                    <ThemedText style={styles.actionText}>Delete</ThemedText>
-                  </TouchableOpacity>
-                </View>
+          <View style={styles.content}>
+            {/* Empty State - No Doctor Selected */}
+            {!selectedDoctor && (
+              <View style={styles.emptyState}>
+                <ThemedText style={styles.emptyTitle}>Select Doctor to View Appointments</ThemedText>
+                <ThemedText style={styles.emptySubtitle}>
+                  Please select a doctor from the filter above to view their appointments
+                </ThemedText>
               </View>
-              ))}
-            </View>
-          )}
+            )}
 
-          {/* Pagination Controls */}
-          {selectedDoctor && filteredAppointments.length > 0 && (
-            <PaginationComponent
-            currentPage={currentPage}
-            totalPages={getTotalPages(filteredAppointments)}
-            totalItems={filteredAppointments.length}
-            itemsPerPage={itemsPerPage}
-            onPageChange={handlePageChange}
-            onDoublePageChange={handleDoublePageChange}
-            />
-          )}
-        </View>
-      </ScrollView>
+            {/* Empty State - No Appointments Found */}
+            {selectedDoctor && filteredAppointments.length === 0 && (
+              <View style={styles.emptyState}>
+                <ThemedText style={styles.emptyTitle}>No Appointments Found</ThemedText>
+                <ThemedText style={styles.emptySubtitle}>
+                  No appointments found for the selected doctor and date
+                </ThemedText>
+              </View>
+            )}
+
+            {/* Appointment Cards */}
+            {selectedDoctor && filteredAppointments.length > 0 && (
+              <View style={styles.appointmentsList}>
+                {getPaginatedAppointments(filteredAppointments).map((appointment) => (
+                  <View key={appointment.id} style={styles.appointmentCard}>
+                    <View style={styles.appointmentHeader}>
+                      <View style={styles.appointmentInfo}>
+                        <ThemedText style={styles.patientName}>
+                          {appointment.patientName}
+                        </ThemedText>
+                        <ThemedText style={styles.patientPhone}>
+                          {appointment.patientPhone}
+                        </ThemedText>
+                        <ThemedText style={styles.doctorName}>
+                          Dr. {appointment.doctorName}
+                        </ThemedText>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: appointment.statusColor }]}>
+                        <ThemedText style={styles.statusText}>{appointment.status}</ThemedText>
+                      </View>
+                    </View>
+
+                    <View style={styles.appointmentDetails}>
+                      <View style={styles.detailRow}>
+                        <Calendar size={16} color="#6B7280" />
+                        <ThemedText style={styles.detailText}>
+                          {appointment.appointmentDate} at {appointment.appointmentTime}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Hash size={16} color="#6B7280" />
+                        <ThemedText style={styles.detailText}>
+                          Token: #{Number(String(appointment.tokenNumber).replace(/^#/, '').replace(/^0+/, '')) || 0}
+                        </ThemedText>
+                      </View>
+                      {appointment.notes && (
+                        <View style={styles.detailRow}>
+                          <FileText size={16} color="#6B7280" />
+                          <ThemedText style={styles.detailText}>
+                            {appointment.notes}
+                          </ThemedText>
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={styles.appointmentActions}>
+                      <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={() => handleViewAppointment(appointment)}
+                      >
+                        <FileText size={16} color="#059669" />
+                        <ThemedText style={styles.actionText}>View</ThemedText>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={() => handleDeleteAppointment(appointment.id)}
+                      >
+                        <Trash2 size={16} color="#DC2626" />
+                        <ThemedText style={styles.actionText}>Delete</ThemedText>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Pagination Controls */}
+            {selectedDoctor && filteredAppointments.length > 0 && (
+              <PaginationComponent
+                currentPage={currentPage}
+                totalPages={getTotalPages(filteredAppointments)}
+                totalItems={filteredAppointments.length}
+                itemsPerPage={itemsPerPage}
+                onPageChange={handlePageChange}
+                onDoublePageChange={handleDoublePageChange}
+              />
+            )}
+          </View>
+        </ScrollView>
       )}
 
       {/* Add Appointment Dialog */}
@@ -856,7 +856,7 @@ export default function AdminAppointments() {
           <View style={styles.datePickerContainer}>
             <View style={styles.datePickerHeader}>
               <ThemedText style={styles.datePickerTitle}>Appointment Details</ThemedText>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.datePickerClose}
                 onPress={() => setViewModalOpen(false)}
               >
@@ -878,8 +878,8 @@ export default function AdminAppointments() {
               </View>
             )}
             <View style={{ marginTop: 16 }}>
-              <TouchableOpacity 
-                style={styles.datePickerConfirmButton}
+              <TouchableOpacity
+                style={styles.viewModalCloseButton}
                 onPress={() => setViewModalOpen(false)}
               >
                 <ThemedText style={styles.datePickerConfirmText}>Close</ThemedText>
@@ -1256,5 +1256,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#374151',
+  },
+  viewModalCloseButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#10B981',
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
   },
 });

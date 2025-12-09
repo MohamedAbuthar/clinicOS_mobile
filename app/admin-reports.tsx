@@ -2,7 +2,7 @@ import { AdminSidebar } from '@/components/AdminSidebar';
 import AppointmentTrendsChart, { AppointmentData } from '@/components/charts/AppointmentTrendsChart';
 import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/lib/contexts/AuthContext';
-import { getCurrentUser } from '@/lib/firebase/auth';
+import { getCurrentUser } from '@/lib/firebase/auth'; // Ensure this path is correct, might need adjustment if getAllDoctors is in firestore.ts
 import { getDocument, getDocuments } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
 import { AlertCircle, Calendar, Clock, TrendingUp, Users } from 'lucide-react-native';
@@ -33,6 +33,7 @@ export default function AdminReports() {
   const [showTimeRangeDropdown, setShowTimeRangeDropdown] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [appointments, setAppointments] = useState<any[]>([]);
+  const [doctors, setDoctors] = useState<any[]>([]);
   const [assistants, setAssistants] = useState<any[]>([]);
   const [queueData, setQueueData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,19 +60,25 @@ export default function AdminReports() {
               role: 'admin'
             });
           }
-          
+
           // Load appointments
           const appointmentsResult = await getDocuments('appointments');
           if (appointmentsResult.success && appointmentsResult.data) {
             setAppointments(appointmentsResult.data);
           }
-          
+
+          // Load doctors
+          const doctorsResult = await getDocuments('doctors');
+          if (doctorsResult.success && doctorsResult.data) {
+            setDoctors(doctorsResult.data);
+          }
+
           // Load assistants (for assistant role filtering)
           const assistantsResult = await getDocuments('assistants');
           if (assistantsResult.success && assistantsResult.data) {
             setAssistants(assistantsResult.data);
           }
-          
+
           // Load queue data for wait time stats
           const queueResult = await getDocuments('queue');
           if (queueResult.success && queueResult.data) {
@@ -110,9 +117,15 @@ export default function AdminReports() {
   // Filter data based on user role (matching web version)
   const getFilteredAppointments = () => {
     if (!user) return appointments;
-    
+
     if (user.role === 'doctor') {
       // Doctor sees only their own appointments
+      // Find the doctor record for this user
+      const currentDoctor = doctors.find(d => d.userId === user.id || d.userId === user.uid);
+      if (currentDoctor) {
+        return appointments.filter(apt => apt.doctorId === currentDoctor.id);
+      }
+      // Fallback if doctor record not found but user role is doctor
       return appointments.filter(apt => apt.doctorId === user.id || apt.doctorId === user.uid);
     } else if (user.role === 'assistant') {
       // Assistant sees appointments for their assigned doctors
@@ -122,7 +135,7 @@ export default function AdminReports() {
       }
       return []; // No assigned doctors
     }
-    
+
     // Admin sees all appointments
     return appointments;
   };
@@ -131,7 +144,7 @@ export default function AdminReports() {
   const getDateRange = (range: TimeRange) => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
+
     switch (range) {
       case 'today':
         return {
@@ -227,7 +240,7 @@ export default function AdminReports() {
   const generateAppointmentChartData = (): AppointmentData[] => {
     const { start, end } = getDateRange(timeRange);
     const data: AppointmentData[] = [];
-    
+
     if (timeRange === 'today') {
       // For today, show hourly data (9 AM to 5 PM)
       for (let hour = 9; hour <= 17; hour++) {
@@ -235,23 +248,23 @@ export default function AdminReports() {
         hourStart.setHours(hour, 0, 0, 0);
         const hourEnd = new Date(start);
         hourEnd.setHours(hour + 1, 0, 0, 0);
-        
+
         const hourAppointments = filteredAppointments.filter(apt => {
           const aptDate = new Date(apt.appointmentDate);
           // Check if appointment date matches today
           if (aptDate.toDateString() !== start.toDateString()) {
             return false;
           }
-          
+
           // If appointmentTime exists, use it; otherwise use appointment date hour
           if (apt.appointmentTime) {
             const aptHour = parseInt(apt.appointmentTime.split(':')[0]);
             return aptHour === hour;
           }
-          
+
           return aptDate.getHours() === hour;
         });
-        
+
         data.push({
           day: `${hour}:00`,
           total: hourAppointments.length,
@@ -263,33 +276,33 @@ export default function AdminReports() {
       // For week/month, show daily data
       const current = new Date(start);
       const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      
+
       while (current <= end) {
         const dayStart = new Date(current);
         dayStart.setHours(0, 0, 0, 0);
         const dayEnd = new Date(current);
         dayEnd.setHours(23, 59, 59, 999);
-        
+
         const dayAppointments = filteredAppointments.filter(apt => {
           const aptDate = new Date(apt.appointmentDate);
           return aptDate >= dayStart && aptDate <= dayEnd;
         });
-        
-        const dayLabel = timeRange === 'thisMonth' 
+
+        const dayLabel = timeRange === 'thisMonth'
           ? `${current.getDate()}/${current.getMonth() + 1}` // Show day/month for month view
           : days[current.getDay()]; // Show day name for week view
-        
+
         data.push({
           day: dayLabel,
           total: dayAppointments.length,
           completed: dayAppointments.filter(apt => apt.status === 'completed').length,
           cancelled: dayAppointments.filter(apt => apt.status === 'cancelled').length,
         });
-        
+
         current.setDate(current.getDate() + 1);
       }
     }
-    
+
     return data;
   };
 
@@ -308,10 +321,10 @@ export default function AdminReports() {
       'bg-green-50': '#22C55E',
       'bg-red-50': '#EF4444',
     };
-    
+
     const bgColor = bgColorMap[iconBgColor] || '#ECFEFF';
     const iconColor = iconColorMap[iconBgColor] || '#06B6D4';
-    
+
     return (
       <View style={styles.statCard}>
         <View style={[styles.statIcon, { backgroundColor: bgColor }]}>
@@ -333,12 +346,13 @@ export default function AdminReports() {
       icon: Calendar,
       iconBgColor: 'bg-cyan-50',
     },
-    {
+    // Only show wait time for admin
+    ...(user?.role !== 'doctor' ? [{
       title: 'Avg Wait Time',
       value: queueStats?.avgWaitTime || '0 min',
       icon: Clock,
       iconBgColor: 'bg-yellow-50',
-    },
+    }] : []),
     {
       title: 'Patients Served',
       value: completedAppointments.toString(),
@@ -374,19 +388,19 @@ export default function AdminReports() {
           </TouchableOpacity>
           <View style={styles.headerTextContainer}>
             <ThemedText style={styles.title}>
-              {user?.role === 'doctor' 
-                ? 'Your Reports' 
+              {user?.role === 'doctor'
+                ? 'Your Reports'
                 : user?.role === 'assistant'
-                ? 'Assigned Doctors Reports'
-                : 'Reports'
+                  ? 'Assigned Doctors Reports'
+                  : 'Reports'
               }
             </ThemedText>
             <ThemedText style={styles.subtitle}>
-              {user?.role === 'doctor' 
-                ? 'Analytics and insights for your practice' 
+              {user?.role === 'doctor'
+                ? 'Analytics and insights for your practice'
                 : user?.role === 'assistant'
-                ? 'Analytics and insights for your assigned doctors'
-                : 'Analytics and insights for clinic operations'
+                  ? 'Analytics and insights for your assigned doctors'
+                  : 'Analytics and insights for clinic operations'
               }
             </ThemedText>
             {/* User context indicator */}
@@ -402,7 +416,7 @@ export default function AdminReports() {
           </View>
         </View>
         {/* Time Range Selector in Header */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.headerTimeRangeButton}
           onPress={() => setShowTimeRangeDropdown(true)}
         >
@@ -457,12 +471,12 @@ export default function AdminReports() {
         animationType="fade"
         onRequestClose={() => setShowTimeRangeDropdown(false)}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setShowTimeRangeDropdown(false)}
         >
-          <View 
+          <View
             style={styles.modalContent}
             onStartShouldSetResponder={() => true}
           >

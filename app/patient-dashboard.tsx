@@ -1,7 +1,10 @@
 import PatientLayout from '@/components/PatientLayout';
 import { ThemedText } from '@/components/themed-text';
 import { useBackendPatientAuth } from '@/lib/contexts/BackendPatientAuthContext';
+import { db } from '@/lib/firebase/config';
+import { getDocuments } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
+import { doc, getDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -115,9 +118,10 @@ const DashboardSection = ({ title, action, children }: {
   </View>
 );
 
-// Appointment Card Component
-const AppointmentCard = ({ appointment, onViewDetails }: {
+// AppointmentCard Component
+const AppointmentCard = ({ appointment, patientName, onViewDetails }: {
   appointment: any;
+  patientName?: string;
   onViewDetails: (appointment: any) => void;
 }) => (
   <TouchableOpacity
@@ -128,6 +132,9 @@ const AppointmentCard = ({ appointment, onViewDetails }: {
       <View style={styles.appointmentInfo}>
         <ThemedText style={styles.appointmentDoctor}>{appointment.doctorName}</ThemedText>
         <ThemedText style={styles.appointmentSpecialty}>{appointment.doctorSpecialty}</ThemedText>
+        {patientName && (
+          <ThemedText style={styles.patientNameLabel}>Patient: {patientName}</ThemedText>
+        )}
       </View>
       <View style={styles.appointmentStatus}>
         <ThemedText style={styles.appointmentDate}>{appointment.appointmentDate}</ThemedText>
@@ -141,33 +148,11 @@ const AppointmentCard = ({ appointment, onViewDetails }: {
   </TouchableOpacity>
 );
 
-// Recent Visit Card Component
-const RecentVisitCard = ({ visit, onViewReport }: {
-  visit: any;
-  onViewReport: (visit: any) => void;
-}) => (
-  <TouchableOpacity
-    style={styles.visitCard}
-    onPress={() => onViewReport(visit)}
-  >
-    <View style={styles.visitHeader}>
-      <ThemedText style={styles.visitDoctor}>{visit.doctor}</ThemedText>
-      <ThemedText style={styles.visitDate}>{visit.date}</ThemedText>
-    </View>
-    <ThemedText style={styles.visitReason}>{visit.reason}</ThemedText>
-    <View style={styles.visitFooter}>
-      <ThemedText style={styles.visitAction}>View Report</ThemedText>
-      <ChevronRight />
-    </View>
-  </TouchableOpacity>
-);
-
 function PatientDashboardContent() {
   const router = useRouter();
-  const { isAuthenticated, isLoading: authLoading } = useBackendPatientAuth();
+  const { isAuthenticated, isLoading: authLoading, patient } = useBackendPatientAuth();
   const [dashboardStats, setDashboardStats] = useState<any>(null);
   const [upcomingAppointments, setUpcomingAppointments] = useState<any[]>([]);
-  const [recentVisits, setRecentVisits] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [hasRedirected, setHasRedirected] = useState(false);
@@ -178,23 +163,74 @@ function PatientDashboardContent() {
     const loadDashboardData = async () => {
       try {
         // Check if patient is authenticated
-        if (isAuthenticated) {
-          console.log('✅ Patient authenticated, loading dashboard data');
-          
-          // For now, we'll show empty data since we don't have patient ID from OTP auth
-          // In a real implementation, you'd need to store patient info after OTP verification
+        if (isAuthenticated && patient?.id) {
+          console.log('✅ Patient authenticated, loading dashboard data for:', patient.id);
+
+          // Fetch appointments for this patient only
+          const appointmentsResult = await getDocuments('appointments', [
+            where('patientId', '==', patient.id)
+          ]);
+
+          let appointments = (appointmentsResult.success && appointmentsResult.data) ? appointmentsResult.data : [];
+
+          // Fetch doctor details for each appointment to ensure we have the name
+          const appointmentsWithDoctorNames = await Promise.all(appointments.map(async (apt: any) => {
+            let updatedApt = { ...apt };
+
+            if (apt.doctorId) {
+              console.log('🔍 Fetching details for doctor:', apt.doctorId);
+              try {
+                const doctorDoc = await getDoc(doc(db, 'doctors', apt.doctorId));
+                if (doctorDoc.exists()) {
+                  const doctorData = doctorDoc.data();
+                  console.log('✅ Found doctor:', doctorData.name);
+                  updatedApt.doctorName = doctorData.name || apt.doctorName || 'Unknown Doctor';
+                  updatedApt.doctorSpecialty = doctorData.specialization || apt.doctorSpecialty || 'General';
+                } else {
+                  console.log('❌ Doctor document not found for ID:', apt.doctorId);
+                  updatedApt.doctorName = apt.doctorName || 'Unknown Doctor';
+                }
+              } catch (e) {
+                console.error('Error fetching doctor details:', e);
+                updatedApt.doctorName = apt.doctorName || 'Unknown Doctor';
+              }
+            } else {
+              console.log('⚠️ No doctorId for appointment:', apt.id);
+              updatedApt.doctorName = apt.doctorName || 'Unknown Doctor';
+            }
+            return updatedApt;
+          }));
+
+          appointments = appointmentsWithDoctorNames;
+
+          // Sort by date (descending)
+          appointments.sort((a: any, b: any) => {
+            return new Date(b.appointmentDate).getTime() - new Date(a.appointmentDate).getTime();
+          });
+
+          // Filter upcoming appointments
+          const upcoming = appointments.filter((apt: any) =>
+            ['scheduled', 'confirmed', 'pending'].includes(apt.status) &&
+            new Date(apt.appointmentDate) >= new Date(new Date().setHours(0, 0, 0, 0))
+          ).sort((a: any, b: any) => new Date(a.appointmentDate).getTime() - new Date(b.appointmentDate).getTime());
+
+          // Calculate total visits (completed appointments)
+          const completedCount = appointments.filter((apt: any) => apt.status === 'completed').length;
+
+          const nextAppointment = upcoming.length > 0 ? upcoming[0] : null;
+
           const stats: any = {
-            totalAppointments: 0,
-            upcomingAppointments: 0,
-            completedAppointments: 0,
-            cancelledAppointments: 0,
-            recentVisits: []
+            totalAppointments: appointments.length,
+            upcomingAppointments: upcoming.length,
+            completedAppointments: completedCount,
+            cancelledAppointments: appointments.filter((apt: any) => apt.status === 'cancelled').length,
+            nextAppointment: nextAppointment
           };
 
           setDashboardStats(stats);
-          setUpcomingAppointments([]);
-          setRecentVisits([]);
-        } else {
+          setUpcomingAppointments(upcoming);
+
+        } else if (!isAuthenticated) {
           // No patient authenticated, redirect to login
           console.log('❌ No patient authenticated, redirecting to login');
           router.push('/patient-auth');
@@ -211,15 +247,15 @@ function PatientDashboardContent() {
     if (!authLoading) {
       loadDashboardData();
     }
-  }, [isAuthenticated, authLoading]);
+  }, [isAuthenticated, authLoading, patient?.id]);
 
   // Redirect to login if not authenticated - with debouncing
   useEffect(() => {
-    console.log('🔍 Dashboard auth check:', { 
-      isAuthenticated, 
+    console.log('🔍 Dashboard auth check:', {
+      isAuthenticated,
       authLoading
     });
-    
+
     // Only redirect if auth is fully loaded and user is definitely not authenticated
     if (!authLoading && !isAuthenticated && !hasRedirected) {
       console.log('❌ Not authenticated after loading, redirecting to login');
@@ -231,18 +267,14 @@ function PatientDashboardContent() {
       return () => clearTimeout(timer);
     }
   }, [isAuthenticated, authLoading, router, hasRedirected]);
-  
+
 
   const handleBookNew = () => {
     router.push('/patient-book');
   };
 
   const handleViewAppointmentDetails = (appointment: any) => {
-    router.push(`/patient-appointments?id=${appointment.id}`);
-  };
-
-  const handleViewReport = (visit: any) => {
-    router.push(`/patient-medicalrecords?id=${visit.id}`);
+    router.push(`/patient-appointments?id=${appointment.id}` as any);
   };
 
   // Show loading while checking authentication or loading data
@@ -340,31 +372,13 @@ function PatientDashboardContent() {
                 <AppointmentCard
                   key={appointment.id}
                   appointment={appointment}
+                  patientName={patient?.name}
                   onViewDetails={handleViewAppointmentDetails}
                 />
               ))
             ) : (
               <ThemedText style={styles.emptyText}>
                 No upcoming appointments
-              </ThemedText>
-            )}
-          </View>
-        </DashboardSection>
-
-        {/* Recent Visits Section */}
-        <DashboardSection title="Recent Visits">
-          <View style={styles.visitsContainer}>
-            {recentVisits.length > 0 ? (
-              recentVisits.map((visit) => (
-                <RecentVisitCard
-                  key={visit.id}
-                  visit={visit}
-                  onViewReport={handleViewReport}
-                />
-              ))
-            ) : (
-              <ThemedText style={styles.emptyText}>
-                No recent visits
               </ThemedText>
             )}
           </View>
@@ -547,6 +561,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     marginTop: 2,
+  },
+  patientNameLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
+    fontWeight: '500',
   },
   appointmentStatus: {
     alignItems: 'flex-end',

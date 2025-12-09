@@ -2,6 +2,7 @@ import { useBackendPatientAuth } from '@/lib/contexts/BackendPatientAuthContext'
 import { usePathname, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Alert, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 import PatientSidebar from './PatientSidebar';
 import { ThemedText } from './themed-text';
@@ -41,7 +42,7 @@ export default function PatientLayout({ children }: PatientLayoutProps) {
   const pathname = usePathname();
   const { isAuthenticated, isLoading: authLoading, logout } = useBackendPatientAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  
+
   const pageInfo = getPageInfo(pathname || '');
 
   useEffect(() => {
@@ -62,7 +63,7 @@ export default function PatientLayout({ children }: PatientLayoutProps) {
   };
 
   const handleNavigation = (path: string) => {
-    router.push(path);
+    router.push(path as any);
   };
 
   const toggleSidebar = () => {
@@ -92,29 +93,33 @@ export default function PatientLayout({ children }: PatientLayoutProps) {
   return (
     <View style={styles.container}>
       {/* Sidebar */}
-      <PatientSidebar 
+      <PatientSidebar
         isOpen={sidebarOpen}
         onClose={closeSidebar}
         onNavigate={handleNavigation}
         onLogout={handleLogout}
       />
-      
+
       {/* Main Content Area */}
       <View style={styles.mainContent}>
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.menuButton} 
-            onPress={toggleSidebar}
-          >
-            <Menu />
-          </TouchableOpacity>
-          <View style={styles.headerContent}>
-            <ThemedText style={styles.headerTitle}>{pageInfo.title}</ThemedText>
-            <ThemedText style={styles.headerSubtitle}>{pageInfo.subtitle}</ThemedText>
-          </View>
+        <View style={{ backgroundColor: '#FFFFFF' }}>
+          <SafeAreaView edges={['top']}>
+            <View style={styles.header}>
+              <TouchableOpacity
+                style={styles.menuButton}
+                onPress={toggleSidebar}
+              >
+                <Menu />
+              </TouchableOpacity>
+              <View style={styles.headerContent}>
+                <ThemedText style={styles.headerTitle}>{pageInfo.title}</ThemedText>
+                <ThemedText style={styles.headerSubtitle}>{pageInfo.subtitle}</ThemedText>
+              </View>
+            </View>
+          </SafeAreaView>
         </View>
-        
+
         {/* Page Content */}
         <View style={styles.content}>
           {children}
@@ -143,7 +148,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12, // Reduced padding as SafeArea adds space
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',

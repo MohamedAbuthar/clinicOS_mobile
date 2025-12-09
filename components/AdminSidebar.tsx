@@ -195,7 +195,21 @@ export function AdminSidebar({
     { icon: ClipboardList, label: 'Schedule', path: '/admin-schedule' },
     { icon: BarChart3, label: 'Reports', path: '/admin-reports' },
     { icon: Settings, label: 'Settings', path: '/admin-settings' },
-  ];
+  ].filter(item => {
+    // Hide Assistants menu for assistants
+    if (userRole?.toLowerCase() === 'assistant' && item.label === 'Assistants') {
+      return false;
+    }
+    // Hide Schedule menu for assistants
+    if (userRole?.toLowerCase() === 'assistant' && item.label === 'Schedule') {
+      return false;
+    }
+    // Hide Reports menu for assistants
+    if (userRole?.toLowerCase() === 'assistant' && item.label === 'Reports') {
+      return false;
+    }
+    return true;
+  });
 
   useEffect(() => {
     if (isOpen) {

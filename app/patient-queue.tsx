@@ -2,11 +2,10 @@ import PatientLayout from '@/components/PatientLayout';
 import { ThemedText } from '@/components/themed-text';
 import { useBackendPatientAuth } from '@/lib/contexts/BackendPatientAuthContext';
 import {
-    getAllDoctors,
-    getAppointmentsByDoctorAndDate,
-    getAppointmentsByPatient,
-    getDoctorById,
-    getPatientProfile
+  getAppointmentsByDoctorAndDate,
+  getAppointmentsByPatient,
+  getDoctorById,
+  getPatientProfile
 } from '@/lib/firebase/firestore';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -96,20 +95,20 @@ function PatientQueueContent() {
         setQueue([]);
         return;
       }
-      
+
       const todayAppointment = patientAppointmentsResult.data.find(
         (apt: any) => apt.appointmentDate === today && apt.status !== 'completed'
       );
-      
+
       if (!todayAppointment) {
         setQueue([]);
         return;
       }
-      
+
       // Decide which doctor to show: selected filter or patient's appointment doctor
       // @ts-ignore
       const doctorId = selectedDoctor || todayAppointment.doctorId;
-      
+
       const [doctorResult, doctorQueueResult] = await Promise.all([
         getDoctorById(doctorId),
         getAppointmentsByDoctorAndDate(doctorId, today)
@@ -119,7 +118,7 @@ function PatientQueueContent() {
         // @ts-ignore
         setDoctorName(doctorResult.data.user?.name || `Dr. ${doctorResult.data.name}` || '');
       }
-      
+
       if (doctorQueueResult.success && doctorQueueResult.data) {
         // Sort by numeric token (001 -> 1). Fallback to createdAt when token missing.
         // @ts-ignore
@@ -142,27 +141,27 @@ function PatientQueueContent() {
 
         const queueWithPatientNames = await Promise.all(
           sorted.map(async (apt: any, idx: number) => {
-              // Prefer the appointment's stored patientName (matches web), fallback to profile lookup
-              let name: string = apt.patientName;
-              if (!name) {
-                const patientProfileResult = await getPatientProfile(apt.patientId);
-                name = (patientProfileResult.success && patientProfileResult.data)
-                  // @ts-ignore
-                  ? patientProfileResult.data.name
-                  : 'Unknown Patient';
-              }
+            // Prefer the appointment's stored patientName (matches web), fallback to profile lookup
+            let name: string = apt.patientName;
+            if (!name) {
+              const patientProfileResult = await getPatientProfile(apt.patientId);
+              name = (patientProfileResult.success && patientProfileResult.data)
+                // @ts-ignore
+                ? patientProfileResult.data.name
+                : 'Unknown Patient';
+            }
 
-              return {
-                id: apt.id,
-                patientId: apt.patientId,
-                // Display sequential order to avoid duplicates in UI
-                tokenNumber: String(idx + 1),
-                name,
-                status: apt.checkedInAt ? 'Checked In' : 'Waiting',
-                appointmentTime: apt.appointmentTime,
-                isCurrentUser: !!(patient && patient.id) && String(apt.patientId) === String(patient.id),
-              };
-            })
+            return {
+              id: apt.id,
+              patientId: apt.patientId,
+              // Display sequential order to avoid duplicates in UI
+              tokenNumber: String(idx + 1),
+              name,
+              status: (apt.checkedInAt ? 'Checked In' : 'Waiting') as 'Waiting' | 'Checked In' | 'Completed',
+              appointmentTime: apt.appointmentTime,
+              isCurrentUser: !!(patient && patient.id) && String(apt.patientId) === String(patient.id),
+            };
+          })
         );
         setQueue(queueWithPatientNames);
       }
@@ -175,24 +174,53 @@ function PatientQueueContent() {
       setIsRefreshing(false);
     }
   };
-  
+
   useEffect(() => {
-    // Load doctors list once
-    (async () => {
+    // Load doctors list based on patient's appointments
+    const fetchPatientDoctors = async () => {
+      if (!patient?.id) return;
+
       try {
-        const res = await getAllDoctors();
-        if (res.success && res.data) {
-          const formatted = res.data.map((doc: any) => ({ id: doc.id, name: doc.user?.name || 'Unknown Doctor' }));
-          setDoctors(formatted);
+        const appointmentsRes = await getAppointmentsByPatient(patient.id);
+        if (appointmentsRes.success && appointmentsRes.data) {
+          // Extract unique doctor IDs
+          const uniqueDoctorIds = Array.from(new Set(appointmentsRes.data.map((apt: any) => apt.doctorId).filter(Boolean)));
+
+          // Fetch details for each doctor
+          const doctorDetails = await Promise.all(
+            uniqueDoctorIds.map(async (id) => {
+              // @ts-ignore
+              const docRes = await getDoctorById(id);
+              if (docRes.success && docRes.data) {
+                // @ts-ignore
+                return { id: docRes.data.id, name: docRes.data.user?.name || docRes.data.name || 'Unknown Doctor' };
+              }
+              return null;
+            })
+          );
+
+          // Filter out nulls and set state
+          const validDoctors = doctorDetails.filter(Boolean);
+          setDoctors(validDoctors);
+
+          // Auto-select first doctor if none selected
+          if (validDoctors.length > 0) {
+            // @ts-ignore
+            setSelectedDoctor(validDoctors[0].id);
+          }
         }
-      } catch {}
-    })();
-  }, []);
+      } catch (error) {
+        console.error('Error fetching patient doctors:', error);
+      }
+    };
+
+    fetchPatientDoctors();
+  }, [patient?.id]);
 
   useEffect(() => {
     fetchQueueData();
   }, [patient, selectedDoctor]);
-  
+
   const onRefresh = () => {
     setIsRefreshing(true);
     fetchQueueData();
@@ -205,9 +233,9 @@ function PatientQueueContent() {
     if (!currentUserItem) {
       return { currentUserStatus: null, queueOrder: [] };
     }
-    
+
     const position = checkedInQueue.findIndex(item => item.patientId === currentUserItem.patientId) + 1;
-    
+
     return {
       currentUserStatus: {
         position: position > 0 ? position : 'Waiting',
@@ -239,7 +267,7 @@ function PatientQueueContent() {
             <ThemedText style={styles.filterLabel}>Doctor</ThemedText>
           </View>
           <View style={styles.selectContainer}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.select}
               onPress={() => setShowDoctorPicker(!showDoctorPicker)}
             >
@@ -251,13 +279,6 @@ function PatientQueueContent() {
             {showDoctorPicker && (
               <View style={styles.dropdown}>
                 <ScrollView style={styles.dropdownList}>
-                  <TouchableOpacity
-                    key="all"
-                    style={[styles.dropdownItem, !selectedDoctor && styles.dropdownItemSelected]}
-                    onPress={() => { setSelectedDoctor(''); setShowDoctorPicker(false); }}
-                  >
-                    <ThemedText style={[styles.dropdownItemText, !selectedDoctor && styles.dropdownItemTextSelected]}>All</ThemedText>
-                  </TouchableOpacity>
                   {doctors.map((d) => (
                     <TouchableOpacity
                       key={d.id}

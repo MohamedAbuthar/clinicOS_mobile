@@ -1,6 +1,7 @@
 import { usePathname, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 
 // SVG Icons (assuming they are defined above)
@@ -136,7 +137,7 @@ export default function PatientSidebar({ isOpen = false, onClose, onNavigate, on
     if (onNavigate) {
       onNavigate(path);
     } else {
-      router.push(path);
+      router.push(path as any);
     }
   };
 
@@ -145,6 +146,7 @@ export default function PatientSidebar({ isOpen = false, onClose, onNavigate, on
   }
 
   return (
+
     <View style={styles.overlay}>
       <TouchableOpacity
         style={styles.backdrop}
@@ -152,83 +154,85 @@ export default function PatientSidebar({ isOpen = false, onClose, onNavigate, on
         onPress={onClose}
       />
       <Animated.View style={[styles.container, { transform: [{ translateX: slideAnim }] }]}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <View style={styles.logoIcon}>
-              <Activity />
-            </View>
-            <View style={styles.logoText}>
-              <Text style={styles.logoTitle}>ClinicOS</Text>
-              <Text style={styles.logoSubtitle}>Patient Portal</Text>
+        <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1 }}>
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.logoContainer}>
+              <View style={styles.logoIcon}>
+                <Activity />
+              </View>
+              <View style={styles.logoText}>
+                <Text style={styles.logoTitle}>ClinicOS</Text>
+                <Text style={styles.logoSubtitle}>Patient Portal</Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        {/* Navigation Menu */}
-        <ScrollView style={styles.navigation} showsVerticalScrollIndicator={false}>
-          <View style={styles.menuList}>
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.path || pathname.startsWith(item.path + '/');
-              
-              return (
-                <TouchableOpacity
-                  key={item.label}
-                  style={[
-                    styles.menuItem,
-                    isActive && styles.activeMenuItem
-                  ]}
-                  onPress={() => handleNavigation(item.path)}
-                >
-                  <View style={[
-                    styles.menuIcon,
-                    isActive && styles.activeMenuIcon
-                  ]}>
-                    <Icon />
-                  </View>
-                  <Text style={[
-                    styles.menuLabel,
-                    isActive && styles.activeMenuLabel
-                  ]}>
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </ScrollView>
+          {/* Navigation Menu */}
+          <ScrollView style={styles.navigation} showsVerticalScrollIndicator={false}>
+            <View style={styles.menuList}>
+              {menuItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.path || pathname.startsWith(item.path + '/');
 
-        {/* User Profile */}
-        <View style={styles.userProfile}>
-          <View style={styles.userInfo}>
-            <View style={styles.userAvatar}>
-              <Text style={styles.userAvatarText}>P</Text>
+                return (
+                  <TouchableOpacity
+                    key={item.label}
+                    style={[
+                      styles.menuItem,
+                      isActive && styles.activeMenuItem
+                    ]}
+                    onPress={() => handleNavigation(item.path)}
+                  >
+                    <View style={[
+                      styles.menuIcon,
+                      isActive && styles.activeMenuIcon
+                    ]}>
+                      <Icon />
+                    </View>
+                    <Text style={[
+                      styles.menuLabel,
+                      isActive && styles.activeMenuLabel
+                    ]}>
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-            <View style={styles.userDetails}>
-              <Text style={styles.userName}>Patient</Text>
-              <Text style={styles.userRole}>Patient Portal</Text>
+          </ScrollView>
+
+          {/* User Profile */}
+          <View style={styles.userProfile}>
+            <View style={styles.userInfo}>
+              <View style={styles.userAvatar}>
+                <Text style={styles.userAvatarText}>P</Text>
+              </View>
+              <View style={styles.userDetails}>
+                <Text style={styles.userName}>Patient</Text>
+                <Text style={styles.userRole}>Patient Portal</Text>
+              </View>
             </View>
+
+            {/* Logout Button */}
+            {onLogout && (
+              <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
+                <Text style={styles.logoutButtonText}>Logout</Text>
+              </TouchableOpacity>
+            )}
           </View>
-          
-          {/* Logout Button */}
-          {onLogout && (
-            <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
-              <Text style={styles.logoutButtonText}>Logout</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        </SafeAreaView>
       </Animated.View>
     </View>
   );
 }
 
 const menuItems = [
-    { icon: LayoutGrid, label: 'Dashboard', path: '/patient-dashboard' },
-    { icon: Calendar, label: 'Appointments', path: '/patient-appointments' },
-    { icon: Activity, label: 'Book Appointment', path: '/patient-book' },
-    { icon: Users, label: 'Queue', path: '/patient-queue' },
-    { icon: UserPlus, label: 'Profile', path: '/patient-profile' },
+  { icon: LayoutGrid, label: 'Dashboard', path: '/patient-dashboard' },
+  { icon: Calendar, label: 'Appointments', path: '/patient-appointments' },
+  { icon: Activity, label: 'Book Appointment', path: '/patient-book' },
+  { icon: Users, label: 'Queue', path: '/patient-queue' },
+  { icon: UserPlus, label: 'Profile', path: '/patient-profile' },
 ];
 
 const styles = StyleSheet.create({
