@@ -6,6 +6,7 @@ import { PaginationComponent } from '@/components/PaginationComponent';
 import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { createDocument, deleteDocument, getAllDoctors, getDocument, getDocuments, updateDocument } from '@/lib/firebase/firestore';
+import { sendAssistantPasswordEmail } from '@/lib/services/assistantEmailService';
 import { useRouter } from 'expo-router';
 import { where } from 'firebase/firestore';
 import { Edit, Trash2, Users } from 'lucide-react-native';
@@ -223,7 +224,24 @@ export default function AdminAssistants() {
       const assistantResult = await createDocument('assistants', assistantDoc);
 
       if (assistantResult.success) {
-        Alert.alert('Success', 'Assistant added successfully!');
+        // Send email with credentials
+        try {
+          const emailResult = await sendAssistantPasswordEmail(
+            assistantData.email,
+            assistantData.password,
+            assistantData.name
+          );
+
+          if (emailResult.success) {
+            Alert.alert('Success', 'Assistant added successfully! Login credentials sent to email.');
+          } else {
+            Alert.alert('Success', `Assistant added, but failed to send email: ${emailResult.message}`);
+          }
+        } catch (emailErr) {
+          console.error('Failed to send email:', emailErr);
+          Alert.alert('Success', 'Assistant added, but failed to send email.');
+        }
+
         setIsAddDialogOpen(false);
         // Reload assistants
         const assistantsResult = await getDocuments('assistants');

@@ -208,6 +208,10 @@ export function AdminSidebar({
     if (userRole?.toLowerCase() === 'assistant' && item.label === 'Reports') {
       return false;
     }
+    // Hide Doctors menu for doctors
+    if (userRole?.toLowerCase() === 'doctor' && item.label === 'Doctors') {
+      return false;
+    }
     return true;
   });
 
