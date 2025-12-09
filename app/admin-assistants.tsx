@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { useAuth } from '@/lib/contexts/AuthContext';
 import { createDocument, deleteDocument, getAllDoctors, getDocument, getDocuments, updateDocument } from '@/lib/firebase/firestore';
 import { useRouter } from 'expo-router';
+import { where } from 'firebase/firestore';
 import { Edit, Trash2, Users } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -66,21 +67,36 @@ export default function AdminAssistants() {
           // Load assistants collection to get assigned doctors
           const assistantsResult = await getDocuments('assistants');
           console.log('Admin Assistants - Assistants Collection Result:', assistantsResult);
-          
+
           // Load users collection to get user details
           const usersResult = await getDocuments('users');
           console.log('Admin Assistants - Users Collection Result:', usersResult);
-          
+
           if (assistantsResult.success && assistantsResult.data && usersResult.success && usersResult.data) {
             const assistantUsers = usersResult.data.filter((user: any) => user.role === 'assistant');
-            
+
+            // For doctor role, get their doctor ID to filter assistants
+            let currentDoctorId: string | null = null;
+            if (user.role === 'doctor') {
+              try {
+                const doctorResult = await getDocuments('doctors', [
+                  where('userId', '==', user.id)
+                ]);
+                if (doctorResult.success && doctorResult.data && doctorResult.data.length > 0) {
+                  currentDoctorId = doctorResult.data[0].id;
+                }
+              } catch (error) {
+                console.error('Error fetching current doctor profile:', error);
+              }
+            }
+
             // Transform the data and fetch assigned doctor names
             const transformedAssistants = await Promise.all(
               assistantUsers.map(async (assistantUser: any) => {
                 // Find the corresponding assistant document
                 const assistantDoc: any = assistantsResult.data.find((a: any) => a.userId === assistantUser.id);
                 const assignedDoctorIds = assistantDoc?.assignedDoctors || [];
-                
+
                 // Fetch doctor names for assigned doctors
                 const assignedDoctorNames: string[] = [];
                 if (assignedDoctorIds.length > 0) {
@@ -103,7 +119,7 @@ export default function AdminAssistants() {
                     }
                   }
                 }
-                
+
                 return {
                   id: assistantUser.id,
                   assistantId: assistantDoc?.id,
@@ -120,13 +136,18 @@ export default function AdminAssistants() {
                 };
               })
             );
-            
-            setAssistants(transformedAssistants);
+
+            // Filter helpers for doctor role
+            const filteredAssistants = currentDoctorId
+              ? transformedAssistants.filter(a => a.assignedDoctors && a.assignedDoctors.includes(currentDoctorId))
+              : transformedAssistants;
+
+            setAssistants(filteredAssistants);
           } else {
             console.log('Admin Assistants - Failed to load assistants from database');
             setAssistants([]);
           }
-          
+
           // Load doctors for the dialog
           const doctorsResult = await getAllDoctors();
           if (doctorsResult.success && doctorsResult.data) {
@@ -184,7 +205,7 @@ export default function AdminAssistants() {
       };
 
       const userResult = await createDocument('users', userDoc);
-      
+
       if (!userResult.success) {
         Alert.alert('Error', 'Failed to create assistant account. Please try again.');
         return;
@@ -200,7 +221,7 @@ export default function AdminAssistants() {
       };
 
       const assistantResult = await createDocument('assistants', assistantDoc);
-      
+
       if (assistantResult.success) {
         Alert.alert('Success', 'Assistant added successfully!');
         setIsAddDialogOpen(false);
@@ -209,12 +230,12 @@ export default function AdminAssistants() {
         const usersResult = await getDocuments('users');
         if (assistantsResult.success && assistantsResult.data && usersResult.success && usersResult.data) {
           const assistantUsers = usersResult.data.filter((user: any) => user.role === 'assistant');
-          
+
           const transformedAssistants = await Promise.all(
             assistantUsers.map(async (assistantUser: any) => {
               const assistantDoc: any = assistantsResult.data.find((a: any) => a.userId === assistantUser.id);
               const assignedDoctorIds = assistantDoc?.assignedDoctors || [];
-              
+
               const assignedDoctorNames: string[] = [];
               if (assignedDoctorIds.length > 0) {
                 for (const doctorId of assignedDoctorIds) {
@@ -235,7 +256,7 @@ export default function AdminAssistants() {
                   }
                 }
               }
-              
+
               return {
                 id: assistantUser.id,
                 assistantId: assistantDoc?.id,
@@ -252,7 +273,7 @@ export default function AdminAssistants() {
               };
             })
           );
-          
+
           setAssistants(transformedAssistants);
         }
       } else {
@@ -307,7 +328,7 @@ export default function AdminAssistants() {
 
   const handleEditAssistantSubmit = async (assistantData: any) => {
     if (!selectedAssistant) return;
-    
+
     setIsLoading(true);
     try {
       // Update user document
@@ -320,7 +341,7 @@ export default function AdminAssistants() {
       };
 
       const userResult = await updateDocument('users', selectedAssistant.id, userUpdateData);
-      
+
       if (userResult.success) {
         // Update assistant document with assigned doctors
         if (selectedAssistant.assistantId) {
@@ -329,15 +350,15 @@ export default function AdminAssistants() {
             isActive: assistantData.status === 'active',
             updatedAt: new Date(),
           };
-          
+
           const assistantResult = await updateDocument('assistants', selectedAssistant.assistantId, assistantUpdateData);
-          
+
           if (!assistantResult.success) {
             console.error('Failed to update assistant document:', assistantResult.error);
             Alert.alert('Warning', 'User updated but doctor assignments may not have been saved. Please try again.');
           }
         }
-        
+
         Alert.alert('Success', 'Assistant updated successfully!');
         setIsEditDialogOpen(false);
         setSelectedAssistant(null);
@@ -346,12 +367,12 @@ export default function AdminAssistants() {
         const usersResult = await getDocuments('users');
         if (assistantsResult.success && assistantsResult.data && usersResult.success && usersResult.data) {
           const assistantUsers = usersResult.data.filter((user: any) => user.role === 'assistant');
-          
+
           const transformedAssistants = await Promise.all(
             assistantUsers.map(async (assistantUser: any) => {
               const assistantDoc: any = assistantsResult.data.find((a: any) => a.userId === assistantUser.id);
               const assignedDoctorIds = assistantDoc?.assignedDoctors || [];
-              
+
               const assignedDoctorNames: string[] = [];
               if (assignedDoctorIds.length > 0) {
                 for (const doctorId of assignedDoctorIds) {
@@ -372,7 +393,7 @@ export default function AdminAssistants() {
                   }
                 }
               }
-              
+
               return {
                 id: assistantUser.id,
                 assistantId: assistantDoc?.id,
@@ -389,7 +410,7 @@ export default function AdminAssistants() {
               };
             })
           );
-          
+
           setAssistants(transformedAssistants);
         }
       } else {
@@ -405,11 +426,11 @@ export default function AdminAssistants() {
 
   const handleDeleteConfirm = async () => {
     if (!selectedAssistant) return;
-    
+
     setIsLoading(true);
     try {
       const result = await deleteDocument('users', selectedAssistant.id);
-      
+
       if (result.success) {
         Alert.alert('Success', 'Assistant deleted successfully!');
         setIsDeleteDialogOpen(false);
@@ -419,12 +440,12 @@ export default function AdminAssistants() {
         const usersResult = await getDocuments('users');
         if (assistantsResult.success && assistantsResult.data && usersResult.success && usersResult.data) {
           const assistantUsers = usersResult.data.filter((user: any) => user.role === 'assistant');
-          
+
           const transformedAssistants = await Promise.all(
             assistantUsers.map(async (assistantUser: any) => {
               const assistantDoc: any = assistantsResult.data.find((a: any) => a.userId === assistantUser.id);
               const assignedDoctorIds = assistantDoc?.assignedDoctors || [];
-              
+
               const assignedDoctorNames: string[] = [];
               if (assignedDoctorIds.length > 0) {
                 for (const doctorId of assignedDoctorIds) {
@@ -445,7 +466,7 @@ export default function AdminAssistants() {
                   }
                 }
               }
-              
+
               return {
                 id: assistantUser.id,
                 assistantId: assistantDoc?.id,
@@ -462,7 +483,7 @@ export default function AdminAssistants() {
               };
             })
           );
-          
+
           setAssistants(transformedAssistants);
         }
       } else {
@@ -494,14 +515,16 @@ export default function AdminAssistants() {
             <ThemedText style={styles.subtitle}>Manage assistant staff</ThemedText>
           </View>
         </View>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => setIsAddDialogOpen(true)}
-          disabled={isLoading}
-        >
-          <UserPlus />
-          <ThemedText style={styles.addButtonText}>Add Assistant</ThemedText>
-        </TouchableOpacity>
+        {user?.role !== 'doctor' && (
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setIsAddDialogOpen(true)}
+            disabled={isLoading}
+          >
+            <UserPlus />
+            <ThemedText style={styles.addButtonText}>Add Assistant</ThemedText>
+          </TouchableOpacity>
+        )}
       </View>
 
       <AdminSidebar
@@ -522,84 +545,84 @@ export default function AdminAssistants() {
       ) : (
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.content}>
-          {/* Assistant Cards */}
-          <View style={styles.assistantsList}>
-            {getPaginatedAssistants(assistants).map((assistant) => (
-              <View key={assistant.id} style={styles.assistantCard}>
-                <View style={styles.assistantHeader}>
-                  <View style={styles.assistantAvatar}>
-                    <ThemedText style={styles.assistantInitials}>
-                      {assistant.initials}
-                    </ThemedText>
+            {/* Assistant Cards */}
+            <View style={styles.assistantsList}>
+              {getPaginatedAssistants(assistants).map((assistant) => (
+                <View key={assistant.id} style={styles.assistantCard}>
+                  <View style={styles.assistantHeader}>
+                    <View style={styles.assistantAvatar}>
+                      <ThemedText style={styles.assistantInitials}>
+                        {assistant.initials}
+                      </ThemedText>
+                    </View>
+                    <View style={styles.assistantInfo}>
+                      <ThemedText style={styles.assistantName}>
+                        {assistant.name}
+                      </ThemedText>
+                      <ThemedText style={styles.assistantEmail}>
+                        {assistant.email}
+                      </ThemedText>
+                      <ThemedText style={styles.assistantPhone}>
+                        {assistant.phone}
+                      </ThemedText>
+                    </View>
+                    <View style={[styles.statusBadge, { backgroundColor: assistant.statusColor }]}>
+                      <ThemedText style={styles.statusText}>{assistant.status}</ThemedText>
+                    </View>
                   </View>
-                  <View style={styles.assistantInfo}>
-                    <ThemedText style={styles.assistantName}>
-                      {assistant.name}
-                    </ThemedText>
-                    <ThemedText style={styles.assistantEmail}>
-                      {assistant.email}
-                    </ThemedText>
-                    <ThemedText style={styles.assistantPhone}>
-                      {assistant.phone}
-                    </ThemedText>
+
+                  <View style={styles.assistantDetails}>
+                    <View style={styles.assignedDoctorsContainer}>
+                      <Users size={16} color="#6B7280" />
+                      <ThemedText style={styles.assignedDoctorsLabel}>Assigned Doctors:</ThemedText>
+                    </View>
+                    {assistant.assignedDoctorNames && assistant.assignedDoctorNames.length > 0 ? (
+                      <View style={styles.doctorsTagContainer}>
+                        {assistant.assignedDoctorNames.map((doctorName: string, index: number) => (
+                          <View key={index} style={styles.doctorTag}>
+                            <ThemedText style={styles.doctorTagText}>{doctorName}</ThemedText>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <ThemedText style={styles.noDoctorsText}>None</ThemedText>
+                    )}
                   </View>
-                  <View style={[styles.statusBadge, { backgroundColor: assistant.statusColor }]}>
-                    <ThemedText style={styles.statusText}>{assistant.status}</ThemedText>
-                  </View>
-                </View>
-                
-                <View style={styles.assistantDetails}>
-                  <View style={styles.assignedDoctorsContainer}>
-                    <Users size={16} color="#6B7280" />
-                    <ThemedText style={styles.assignedDoctorsLabel}>Assigned Doctors:</ThemedText>
-                  </View>
-                  {assistant.assignedDoctorNames && assistant.assignedDoctorNames.length > 0 ? (
-                    <View style={styles.doctorsTagContainer}>
-                      {assistant.assignedDoctorNames.map((doctorName: string, index: number) => (
-                        <View key={index} style={styles.doctorTag}>
-                          <ThemedText style={styles.doctorTagText}>{doctorName}</ThemedText>
-                        </View>
-                      ))}
-                  </View>
-                  ) : (
-                    <ThemedText style={styles.noDoctorsText}>None</ThemedText>
-                  )}
-                </View>
-                
-                <View style={styles.assistantActions}>
-                  {/* <TouchableOpacity style={[styles.actionButton, { backgroundColor: assistant.statusColor }]}>
+
+                  <View style={styles.assistantActions}>
+                    {/* <TouchableOpacity style={[styles.actionButton, { backgroundColor: assistant.statusColor }]}>
                     <ThemedText style={styles.actionText}>{assistant.status}</ThemedText>
                   </TouchableOpacity> */}
-                  <TouchableOpacity 
-                    style={styles.actionButton}
-                    onPress={() => handleEditAssistant(assistant)}
-                  >
-                    <Edit size={16} color="#6B7280" />
-                    <ThemedText style={styles.actionText}>Edit</ThemedText>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.actionButton}
-                    onPress={() => handleDeleteAssistant(assistant)}
-                  >
-                    <Trash2 size={16} color="#DC2626" />
-                    <ThemedText style={styles.actionText}>Delete</ThemedText>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleEditAssistant(assistant)}
+                    >
+                      <Edit size={16} color="#6B7280" />
+                      <ThemedText style={styles.actionText}>Edit</ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleDeleteAssistant(assistant)}
+                    >
+                      <Trash2 size={16} color="#DC2626" />
+                      <ThemedText style={styles.actionText}>Delete</ThemedText>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
 
-          {/* Pagination Controls */}
-          <PaginationComponent
-            currentPage={currentPage}
-            totalPages={getTotalPages(assistants)}
-            totalItems={assistants.length}
-            itemsPerPage={itemsPerPage}
-            onPageChange={handlePageChange}
-            onDoublePageChange={handleDoublePageChange}
-          />
-        </View>
-      </ScrollView>
+            {/* Pagination Controls */}
+            <PaginationComponent
+              currentPage={currentPage}
+              totalPages={getTotalPages(assistants)}
+              totalItems={assistants.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={handlePageChange}
+              onDoublePageChange={handleDoublePageChange}
+            />
+          </View>
+        </ScrollView>
       )}
 
       {/* Add Assistant Dialog */}
@@ -636,39 +659,39 @@ export default function AdminAssistants() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#F9FAFB' 
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB'
   },
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'flex-start', 
-    paddingHorizontal: 20, 
-    paddingVertical: 16, 
-    backgroundColor: '#FFFFFF', 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#E5E7EB' 
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB'
   },
-  headerLeft: { 
-    flexDirection: 'row', 
-    alignItems: 'flex-start', 
-    flex: 1, 
-    marginRight: 12 
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flex: 1,
+    marginRight: 12
   },
-  menuButton: { 
-    padding: 8, 
-    marginRight: 12 
+  menuButton: {
+    padding: 8,
+    marginRight: 12
   },
-  title: { 
-    fontSize: 20, 
-    fontWeight: '700', 
-    color: '#111827', 
-    marginBottom: 2 
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 2
   },
-  subtitle: { 
-    fontSize: 12, 
-    color: '#6B7280' 
+  subtitle: {
+    fontSize: 12,
+    color: '#6B7280'
   },
   addButton: {
     flexDirection: 'row',
@@ -695,28 +718,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
   },
-  scrollView: { 
-    flex: 1 
+  scrollView: {
+    flex: 1
   },
-  content: { 
-    padding: 20 
+  content: {
+    padding: 20
   },
-  emptyState: { 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    paddingVertical: 64 
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 64
   },
-  emptyTitle: { 
-    fontSize: 20, 
-    fontWeight: '600', 
-    color: '#111827', 
-    marginTop: 16, 
-    marginBottom: 8 
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#111827',
+    marginTop: 16,
+    marginBottom: 8
   },
-  emptySubtitle: { 
-    fontSize: 16, 
-    color: '#6B7280', 
-    textAlign: 'center' 
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center'
   },
   assistantsList: {
     paddingHorizontal: 16,

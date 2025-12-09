@@ -242,9 +242,9 @@ export default function AdminDashboard() {
           console.log('Admin Dashboard - Doctors Result:', doctorsResult);
 
           // Use data if available, otherwise use fallback
-          let appointments = appointmentsResult.success ? appointmentsResult.data : [];
-          const doctorsData = doctorsResult.success ? doctorsResult.data : [];
-          const assistantsData = assistantsResult.success ? assistantsResult.data : [];
+          let appointments = (appointmentsResult.success && appointmentsResult.data) ? appointmentsResult.data : [];
+          const doctorsData = (doctorsResult.success && doctorsResult.data) ? doctorsResult.data : [];
+          const assistantsData = (assistantsResult.success && assistantsResult.data) ? assistantsResult.data : [];
 
           // Apply role-based filtering to doctors
           let filteredDoctors = doctorsData;
@@ -321,7 +321,7 @@ export default function AdminDashboard() {
                   const doctorAppointmentsResult = await getAppointmentsByDoctorAndDate(doctor.id, today);
                   if (doctorAppointmentsResult.success && doctorAppointmentsResult.data) {
                     // Filter out completed and cancelled appointments
-                    const queueAppointments = doctorAppointmentsResult.data.filter((apt: any) => 
+                    const queueAppointments = doctorAppointmentsResult.data.filter((apt: any) =>
                       apt.status !== 'completed' && apt.status !== 'cancelled'
                     );
                     queueLength = queueAppointments.length;

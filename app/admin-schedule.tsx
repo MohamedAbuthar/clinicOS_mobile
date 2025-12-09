@@ -187,9 +187,11 @@ export default function AdminSchedule() {
         if (currentUser) {
           // Load user profile from Firestore to get role
           const userResult = await getDocument('users', currentUser.uid);
+          let userData: any = null;
+
           if (userResult.success && userResult.data) {
-            const userData = userResult.data as any;
-            
+            userData = userResult.data as any;
+
             // Check if user is assistant - redirect if they are
             if (userData.role === 'assistant') {
               Alert.alert(
@@ -204,27 +206,50 @@ export default function AdminSchedule() {
               );
               return;
             }
-            
+
             setUser(userData);
           } else {
             // Fallback to Firebase user if Firestore data not found
-            setUser({
+            userData = {
               name: currentUser.displayName || 'Admin User',
               email: currentUser.email || '',
               role: 'admin'
-            });
+            } as any; // Cast to any to allow adding id if needed
+            setUser(userData);
           }
-          
+
           const doctorsResult = await getAllDoctors();
           if (doctorsResult.success && doctorsResult.data) {
-            const transformedDoctors = doctorsResult.data.map((doctor: any) => ({
+            let transformedDoctors = doctorsResult.data.map((doctor: any) => ({
               id: doctor.id,
               name: doctor.user?.name || 'Unknown Doctor',
               specialty: doctor.specialty || 'General Medicine',
               user: doctor.user
             }));
+
+            // Filter for doctor role
+            if (userData && userData.role === 'doctor') {
+              transformedDoctors = transformedDoctors.filter(d =>
+                d.user?.email === currentUser.email ||
+                d.user?.id === currentUser.uid ||
+                (userData.id && d.id === userData.id)
+              );
+
+              // More strict filtering if possible
+              transformedDoctors = doctorsResult.data
+                .filter((doctor: any) => doctor.userId === currentUser.uid)
+                .map((doctor: any) => ({
+                  id: doctor.id,
+                  name: doctor.user?.name || 'Unknown Doctor',
+                  specialty: doctor.specialty || 'General Medicine',
+                  user: doctor.user
+                }));
+            }
+
             setDoctors(transformedDoctors);
-            
+
+            setDoctors(transformedDoctors);
+
             // Auto-select first doctor
             if (transformedDoctors.length > 0 && !selectedDoctor) {
               setSelectedDoctor(transformedDoctors[0].id);
@@ -267,7 +292,7 @@ export default function AdminSchedule() {
           } else if (typeof holiday.date === 'string' && holiday.date.includes('T')) {
             formattedDate = holiday.date.split('T')[0];
           }
-          
+
           return {
             id: holiday.id,
             title: holiday.reason || holiday.title,
@@ -339,9 +364,9 @@ export default function AdminSchedule() {
     if (!startTime || !endTime) {
       return 'both';
     }
-    
+
     const [hours] = startTime.split(':').map(Number);
-    
+
     // Morning session typically starts before 13:00 (1 PM)
     // Evening session typically starts at or after 13:00 (1 PM)
     if (hours < 13) {
@@ -355,21 +380,21 @@ export default function AdminSchedule() {
     // Check if there's a matching override for the other session (same date, same reason)
     // This helps determine if it was originally created as "both"
     let session: 'morning' | 'evening' | 'both' = timeRangeToSession(holiday.startTime, holiday.endTime);
-    
+
     // Check if there's another override with same date and reason but different time
-    const matchingOverride = holidays.find(h => 
-      h.id !== holiday.id && 
-      h.date === holiday.date && 
+    const matchingOverride = holidays.find(h =>
+      h.id !== holiday.id &&
+      h.date === holiday.date &&
       h.title === holiday.title &&
       ((h.startTime === '09:00' && holiday.startTime === '14:00') ||
-       (h.startTime === '14:00' && holiday.startTime === '09:00'))
+        (h.startTime === '14:00' && holiday.startTime === '09:00'))
     );
-    
+
     if (matchingOverride) {
       // If we find a matching override, it means this was created as "both"
       session = 'both';
     }
-    
+
     // Map backend type to UI type - use displayType if available (stored when creating)
     let uiType: 'special-event' | 'holiday' | 'extended-hours';
     if (holiday.displayType) {
@@ -385,7 +410,7 @@ export default function AdminSchedule() {
         uiType = 'special-event';
       }
     }
-    
+
     setEditingOverride({
       id: holiday.id,
       title: holiday.title,
@@ -407,32 +432,32 @@ export default function AdminSchedule() {
     try {
       // Get the original override to check if it was "both"
       const originalOverride = holidays.find(h => h.id === data.id);
-      const wasBoth = originalOverride && holidays.some(h => 
-        h.id !== originalOverride.id && 
-        h.date === originalOverride.date && 
+      const wasBoth = originalOverride && holidays.some(h =>
+        h.id !== originalOverride.id &&
+        h.date === originalOverride.date &&
         h.title === originalOverride.title &&
         ((h.startTime === '09:00' && originalOverride.startTime === '14:00') ||
-         (h.startTime === '14:00' && originalOverride.startTime === '09:00'))
+          (h.startTime === '14:00' && originalOverride.startTime === '09:00'))
       );
 
       // Map UI types to backend types
-      const overrideType = data.type === 'special-event' || data.type === 'extended-hours' 
-        ? 'extended_hours' 
-        : data.type === 'holiday' 
-        ? 'holiday' 
-        : 'extended_hours';
-      
+      const overrideType = data.type === 'special-event' || data.type === 'extended-hours'
+        ? 'extended_hours'
+        : data.type === 'holiday'
+          ? 'holiday'
+          : 'extended_hours';
+
       // If changing from "both" to a single session, delete the other session override
       if (wasBoth && data.session !== 'both' && originalOverride) {
         // Find the matching override for the other session
-        const otherSessionOverride = holidays.find(h => 
-          h.id !== data.id && 
-          h.date === originalOverride.date && 
+        const otherSessionOverride = holidays.find(h =>
+          h.id !== data.id &&
+          h.date === originalOverride.date &&
           h.title === originalOverride.title &&
           ((data.session === 'morning' && h.startTime === '14:00') ||
-           (data.session === 'evening' && h.startTime === '09:00'))
+            (data.session === 'evening' && h.startTime === '09:00'))
         );
-        
+
         if (otherSessionOverride) {
           // Delete the other session override
           await deleteScheduleOverride(otherSessionOverride.id);
@@ -442,15 +467,15 @@ export default function AdminSchedule() {
       // If changing to "both", we need to create/update both sessions
       if (data.session === 'both') {
         // Check if both sessions exist
-        const morningOverride = holidays.find(h => 
+        const morningOverride = holidays.find(h =>
           h.id !== data.id &&
-          h.date === data.date && 
+          h.date === data.date &&
           h.title === originalOverride?.title &&
           h.startTime === '09:00'
         );
-        const eveningOverride = holidays.find(h => 
+        const eveningOverride = holidays.find(h =>
           h.id !== data.id &&
-          h.date === data.date && 
+          h.date === data.date &&
           h.title === originalOverride?.title &&
           h.startTime === '14:00'
         );
@@ -535,15 +560,15 @@ export default function AdminSchedule() {
         // If the current override was a single session that's now part of "both", 
         // and we've created the other session, we might need to delete the current one
         // if it's not morning or evening (shouldn't happen, but handle edge case)
-        if (originalOverride && originalOverride.startTime && 
-            originalOverride.startTime !== '09:00' && originalOverride.startTime !== '14:00') {
+        if (originalOverride && originalOverride.startTime &&
+          originalOverride.startTime !== '09:00' && originalOverride.startTime !== '14:00') {
           // If we created both sessions, delete the original single session override
           await deleteScheduleOverride(data.id);
         }
       } else {
         // Single session update
         const { startTime, endTime } = sessionToTimeRange(data.session);
-        
+
         const result = await updateScheduleOverride(data.id, {
           date: data.date,
           startTime,
@@ -553,13 +578,13 @@ export default function AdminSchedule() {
           description: data.description || '',
           displayType: data.type, // Store the UI type for correct mapping when editing
         });
-        
+
         if (!result.success) {
           Alert.alert('Error', result.error || 'Failed to update schedule override. Please try again.');
           return;
         }
       }
-      
+
       Alert.alert('Success', 'Schedule override updated successfully!');
       setIsEditOverrideDialogOpen(false);
       setEditingOverride(null);
@@ -593,7 +618,7 @@ export default function AdminSchedule() {
             setIsLoading(true);
             try {
               const result = await deleteScheduleOverride(holidayId);
-              
+
               if (result.success) {
                 Alert.alert('Success', 'Holiday deleted successfully!');
                 await loadHolidays();
@@ -635,18 +660,18 @@ export default function AdminSchedule() {
       Alert.alert('Error', 'Please select a doctor first');
       return;
     }
-    
+
     setIsLoading(true);
     try {
       console.log('Saving holiday:', data);
-      
+
       // Map UI types to backend types
-      const overrideType = data.type === 'special-event' || data.type === 'extended-hours' 
-        ? 'extended_hours' 
-        : data.type === 'holiday' 
-        ? 'holiday' 
-        : 'extended_hours'; // Default fallback
-      
+      const overrideType = data.type === 'special-event' || data.type === 'extended-hours'
+        ? 'extended_hours'
+        : data.type === 'holiday'
+          ? 'holiday'
+          : 'extended_hours'; // Default fallback
+
       // If "both" is selected, create two separate overrides (morning and evening)
       if (data.session === 'both') {
         // Create morning session override
@@ -660,9 +685,9 @@ export default function AdminSchedule() {
           description: data.description || '',
           displayType: data.type, // Store the UI type for correct mapping when editing
         };
-        
+
         const morningResult = await createScheduleOverride(morningHolidayData);
-        
+
         // Create evening session override
         const eveningHolidayData = {
           doctorId: selectedDoctor,
@@ -674,9 +699,9 @@ export default function AdminSchedule() {
           description: data.description || '',
           displayType: data.type, // Store the UI type for correct mapping when editing
         };
-        
+
         const eveningResult = await createScheduleOverride(eveningHolidayData);
-        
+
         if (morningResult.success && eveningResult.success) {
           Alert.alert('Success', 'Holiday added successfully for both sessions!');
           setIsAddHolidayDialogOpen(false);
@@ -688,7 +713,7 @@ export default function AdminSchedule() {
       } else {
         // For single session (morning or evening)
         const { startTime, endTime } = sessionToTimeRange(data.session);
-        
+
         const holidayData = {
           doctorId: selectedDoctor,
           reason: data.title,
@@ -699,9 +724,9 @@ export default function AdminSchedule() {
           description: data.description || '',
           displayType: data.type, // Store the UI type for correct mapping when editing
         };
-        
+
         const result = await createScheduleOverride(holidayData);
-        
+
         if (result.success) {
           Alert.alert('Success', 'Holiday added successfully!');
           setIsAddHolidayDialogOpen(false);
@@ -734,7 +759,7 @@ export default function AdminSchedule() {
             <ThemedText style={styles.subtitle}>Manage schedule holidays and overrides</ThemedText>
           </View>
         </View>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.addButton}
           onPress={handleOpenAddHolidayDialog}
           disabled={isLoading}
@@ -761,90 +786,91 @@ export default function AdminSchedule() {
           <ThemedText style={styles.loadingText}>Loading schedule...</ThemedText>
         </View>
       ) : (
-        <ScrollView 
-        style={styles.scrollView} 
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.content}>
-          {/* Doctor Selection */}
-          <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>Select Doctor:</ThemedText>
-            <TouchableOpacity 
-              style={styles.doctorSelector}
-              onPress={toggleDoctorDropdown}
-            >
-              <User />
-              <ThemedText style={styles.doctorName}>
-                {selectedDoctorData?.name || 'Select a doctor'}
-              </ThemedText>
-              <ChevronDown />
-            </TouchableOpacity>
-          </View>
-
-          {/* Schedule Overrides */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <ThemedText style={styles.sectionTitle}>Schedule Holidays</ThemedText>
-              <ThemedText style={styles.sectionSubtitle}>
-                Holidays, extended hours, and special schedules
-              </ThemedText>
+        <ScrollView
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.content}>
+            {/* Doctor Selection */}
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>Select Doctor:</ThemedText>
+              <TouchableOpacity
+                style={[styles.doctorSelector, user?.role === 'doctor' && { opacity: 0.7 }]}
+                onPress={user?.role === 'doctor' ? undefined : toggleDoctorDropdown}
+                disabled={user?.role === 'doctor'}
+              >
+                <User />
+                <ThemedText style={styles.doctorName}>
+                  {selectedDoctorData?.name || 'Select a doctor'}
+                </ThemedText>
+                {user?.role !== 'doctor' && <ChevronDown />}
+              </TouchableOpacity>
             </View>
-            
-            {holidays.length > 0 ? (
-              <View style={styles.holidayList}>
-                {holidays.map((holiday) => (
-                  <View key={holiday.id} style={styles.holidayCard}>
-                    <View style={styles.holidayCardContent}>
-                      <View style={styles.holidayCardLeft}>
-                        <ThemedText style={styles.holidayTitle}>{holiday.title}</ThemedText>
-                        <View style={styles.holidayMeta}>
-                          <View style={styles.holidayMetaItem}>
-                            <Calendar />
-                            <ThemedText style={styles.holidayMetaText}>{holiday.date}</ThemedText>
-                          </View>
-                          {holiday.startTime && holiday.endTime && (
+
+            {/* Schedule Overrides */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <ThemedText style={styles.sectionTitle}>Schedule Holidays</ThemedText>
+                <ThemedText style={styles.sectionSubtitle}>
+                  Holidays, extended hours, and special schedules
+                </ThemedText>
+              </View>
+
+              {holidays.length > 0 ? (
+                <View style={styles.holidayList}>
+                  {holidays.map((holiday) => (
+                    <View key={holiday.id} style={styles.holidayCard}>
+                      <View style={styles.holidayCardContent}>
+                        <View style={styles.holidayCardLeft}>
+                          <ThemedText style={styles.holidayTitle}>{holiday.title}</ThemedText>
+                          <View style={styles.holidayMeta}>
                             <View style={styles.holidayMetaItem}>
-                              <Clock />
-                              <ThemedText style={styles.holidayMetaText}>
-                                {holiday.startTime} - {holiday.endTime}
-                              </ThemedText>
+                              <Calendar />
+                              <ThemedText style={styles.holidayMetaText}>{holiday.date}</ThemedText>
                             </View>
-                          )}
+                            {holiday.startTime && holiday.endTime && (
+                              <View style={styles.holidayMetaItem}>
+                                <Clock />
+                                <ThemedText style={styles.holidayMetaText}>
+                                  {holiday.startTime} - {holiday.endTime}
+                                </ThemedText>
+                              </View>
+                            )}
+                          </View>
+                          <View style={styles.holidayBadge}>
+                            <ThemedText style={styles.holidayBadgeText}>{holiday.type}</ThemedText>
+                          </View>
                         </View>
-                        <View style={styles.holidayBadge}>
-                          <ThemedText style={styles.holidayBadgeText}>{holiday.type}</ThemedText>
+                        <View style={styles.holidayCardActions}>
+                          <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() => handleEditOverride(holiday)}
+                            disabled={isLoading}
+                          >
+                            <Edit />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() => handleDeleteOverride(holiday.id)}
+                            disabled={isLoading}
+                          >
+                            <Trash />
+                          </TouchableOpacity>
                         </View>
-                      </View>
-                      <View style={styles.holidayCardActions}>
-                        <TouchableOpacity
-                          style={styles.actionButton}
-                          onPress={() => handleEditOverride(holiday)}
-                          disabled={isLoading}
-                        >
-                          <Edit />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.actionButton}
-                          onPress={() => handleDeleteOverride(holiday.id)}
-                          disabled={isLoading}
-                        >
-                          <Trash />
-                        </TouchableOpacity>
                       </View>
                     </View>
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <View style={styles.emptyState}>
-                <Calendar />
-                <ThemedText style={styles.emptyStateText}>No schedule overrides found</ThemedText>
-              </View>
-            )}
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <Calendar />
+                  <ThemedText style={styles.emptyStateText}>No schedule overrides found</ThemedText>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
       )}
 
       {/* Doctor Selection Modal */}
@@ -854,7 +880,7 @@ export default function AdminSchedule() {
         animationType="fade"
         onRequestClose={() => setShowDoctorDropdown(false)}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setShowDoctorDropdown(false)}

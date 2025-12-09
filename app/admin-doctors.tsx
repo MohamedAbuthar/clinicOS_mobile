@@ -77,21 +77,21 @@ const calculateDoctorStats = async (doctorId: string) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     const appointmentsResult = await getAppointmentsByDoctorAndDate(doctorId, today);
-    
+
     if (appointmentsResult.success && appointmentsResult.data) {
       const appointments = appointmentsResult.data;
       const total = appointments.length;
       const done = appointments.filter((apt: any) => apt.status === 'completed').length;
-      const waiting = appointments.filter((apt: any) => 
+      const waiting = appointments.filter((apt: any) =>
         apt.status === 'scheduled' || apt.status === 'confirmed' || apt.status === 'checked_in'
       ).length;
-      
+
       return { total, done, waiting };
     }
   } catch (error) {
     console.error('Error calculating doctor stats:', error);
   }
-  
+
   return { total: 0, done: 0, waiting: 0 };
 };
 
@@ -107,10 +107,10 @@ const transformDoctorData = async (doctors: any[]) => {
     'workers',
     'members'
   ];
-  
+
   const usersResult = await getDocuments('users');
   let allAssistants: any[] = [];
-  
+
   // Fetch from all collections
   for (const collectionName of collectionsToTry) {
     try {
@@ -122,24 +122,24 @@ const transformDoctorData = async (doctors: any[]) => {
       console.log(`Error fetching ${collectionName}:`, error);
     }
   }
-  
+
   // Remove duplicates
-  const uniqueAssistants = allAssistants.filter((assistant, index, self) => 
+  const uniqueAssistants = allAssistants.filter((assistant, index, self) =>
     index === self.findIndex(a => a.id === assistant.id)
   );
-  
+
   console.log(`Found ${uniqueAssistants.length} unique assistants from all collections`);
-  
+
   let assistantsMap = new Map();
   if (uniqueAssistants.length > 0) {
     console.log('Building assistants map from', uniqueAssistants.length, 'assistants');
     // Create a map of assistant document IDs to their names
     uniqueAssistants.forEach((assistant: any) => {
       console.log(`\n🔍 Processing assistant ${assistant.id}:`, JSON.stringify(assistant, null, 2));
-      
+
       // Try multiple ways to get the assistant name
       let assistantName = '';
-      
+
       // Use same name extraction strategies as AddDoctorDialog, but with proper undefined checks
       const nameStrategies = [
         () => assistant.name,
@@ -205,7 +205,7 @@ const transformDoctorData = async (doctors: any[]) => {
         },
         () => assistant.info?.firstName
       ];
-      
+
       for (let i = 0; i < nameStrategies.length; i++) {
         try {
           const name = nameStrategies[i]();
@@ -218,7 +218,7 @@ const transformDoctorData = async (doctors: any[]) => {
           // Continue to next strategy
         }
       }
-      
+
       // Fallback: Look up user by userId
       if (!assistantName && assistant.userId && usersResult.success && usersResult.data) {
         const user: any = usersResult.data.find((u: any) => u.id === assistant.userId);
@@ -227,7 +227,7 @@ const transformDoctorData = async (doctors: any[]) => {
           console.log(`✅ Found name via userId lookup: "${assistantName}"`);
         }
       }
-      
+
       // Also check if assistantId is actually a userId in users collection
       if (!assistantName && usersResult.success && usersResult.data) {
         const user: any = usersResult.data.find((u: any) => u.id === assistant.id);
@@ -236,14 +236,14 @@ const transformDoctorData = async (doctors: any[]) => {
           console.log(`✅ Found name via direct userId lookup: "${assistantName}"`);
         }
       }
-      
+
       // Only store if we have a valid name (not undefined, null, or empty)
-      if (assistantName && 
-          assistant.id && 
-          assistantName !== 'undefined' && 
-          assistantName !== 'null' && 
-          !assistantName.includes('undefined') &&
-          assistantName.trim() !== '') {
+      if (assistantName &&
+        assistant.id &&
+        assistantName !== 'undefined' &&
+        assistantName !== 'null' &&
+        !assistantName.includes('undefined') &&
+        assistantName.trim() !== '') {
         assistantsMap.set(assistant.id, assistantName);
         console.log(`✅ Mapped assistant ${assistant.id} -> ${assistantName}`);
       } else {
@@ -252,24 +252,24 @@ const transformDoctorData = async (doctors: any[]) => {
     });
     console.log('Final assistants map:', Array.from(assistantsMap.entries()));
   }
-  
+
   const transformedDoctors = await Promise.all(
     doctors.map(async (doctor: any, index: number) => {
       const stats = await calculateDoctorStats(doctor.id);
-      
+
       // Get assigned assistant names
       const assignedAssistantIds = doctor.assignedAssistants || [];
       const assignedAssistantNames: string[] = [];
-      
+
       console.log(`\n=== Doctor ${doctor.id} (${doctor.user?.name || 'Unknown'}) ===`);
       console.log(`Assigned Assistant IDs:`, assignedAssistantIds);
       console.log(`Assistants map size:`, assistantsMap.size);
       console.log(`Total assistants found:`, uniqueAssistants.length);
-      
+
       if (assignedAssistantIds.length > 0) {
         for (const assistantId of assignedAssistantIds) {
           let assistantName = assistantsMap.get(assistantId);
-          
+
           // Try to find in all assistants
           if (!assistantName && uniqueAssistants.length > 0) {
             const assistant: any = uniqueAssistants.find((a: any) => a.id === assistantId);
@@ -339,7 +339,7 @@ const transformDoctorData = async (doctors: any[]) => {
                 },
                 () => assistant.info?.firstName
               ];
-              
+
               for (const strategy of nameStrategies) {
                 try {
                   const name = strategy();
@@ -351,13 +351,13 @@ const transformDoctorData = async (doctors: any[]) => {
                   // Continue to next strategy
                 }
               }
-              
+
               // Only add if we have a valid name
-              if (assistantName && 
-                  assistantName !== 'undefined' && 
-                  assistantName !== 'null' && 
-                  !assistantName.includes('undefined') &&
-                  assistantName.trim() !== '') {
+              if (assistantName &&
+                assistantName !== 'undefined' &&
+                assistantName !== 'null' &&
+                !assistantName.includes('undefined') &&
+                assistantName.trim() !== '') {
                 assistantsMap.set(assistantId, assistantName);
                 assignedAssistantNames.push(assistantName);
                 console.log(`✅ Found assistant ${assistantId}: ${assistantName}`);
@@ -402,11 +402,11 @@ const transformDoctorData = async (doctors: any[]) => {
                 console.log(`❌ Assistant with ID ${assistantId} not found in any collection`);
               }
             }
-          } else if (assistantName && 
-                     assistantName !== 'undefined' && 
-                     assistantName !== 'null' && 
-                     !assistantName.includes('undefined') &&
-                     assistantName.trim() !== '') {
+          } else if (assistantName &&
+            assistantName !== 'undefined' &&
+            assistantName !== 'null' &&
+            !assistantName.includes('undefined') &&
+            assistantName.trim() !== '') {
             assignedAssistantNames.push(assistantName);
             console.log(`✅ Found assistant ${assistantId} from map: ${assistantName}`);
           } else if (assistantName) {
@@ -414,9 +414,9 @@ const transformDoctorData = async (doctors: any[]) => {
           }
         }
       }
-      
+
       console.log(`Final assistant names for doctor ${doctor.id}:`, assignedAssistantNames);
-      
+
       return {
         id: doctor.id,
         name: doctor.user?.name || 'Unknown Doctor',
@@ -434,8 +434,8 @@ const transformDoctorData = async (doctors: any[]) => {
         online: doctor.isActive,
         phone: doctor.user?.phone || 'N/A',
         email: doctor.user?.email || 'N/A',
-        schedule: doctor.schedule || (doctor.morningStartTime && doctor.eveningEndTime ? 
-          `Morning: ${doctor.morningStartTime} - ${doctor.morningEndTime || '12:00'}, Evening: ${doctor.eveningStartTime || '17:00'} - ${doctor.eveningEndTime}` : 
+        schedule: doctor.schedule || (doctor.morningStartTime && doctor.eveningEndTime ?
+          `Morning: ${doctor.morningStartTime} - ${doctor.morningEndTime || '12:00'}, Evening: ${doctor.eveningStartTime || '17:00'} - ${doctor.eveningEndTime}` :
           'Mon-Fri, 9:00 AM - 5:00 PM'),
         room: doctor.room || 'Room 101',
         startTime: doctor.startTime || '09:00',
@@ -447,7 +447,7 @@ const transformDoctorData = async (doctors: any[]) => {
       };
     })
   );
-  
+
   return transformedDoctors;
 };
 
@@ -473,8 +473,35 @@ export default function AdminDoctors() {
           const doctorsResult = await getAllDoctors();
           console.log('Admin Doctors - Doctors Result:', doctorsResult);
           if (doctorsResult.success && doctorsResult.data) {
+            let doctorsData = doctorsResult.data;
+            if (user.role === 'doctor') {
+              doctorsData = doctorsData.filter((doc: any) => doc.userId === user.id);
+            } else if (user.role === 'assistant') {
+              // Find assistant record for this user to get their ID
+              // We need to fetch assistants to map the user to an assistant ID if possible
+              const assistantsResult = await getDocuments('assistants');
+              let assistantIds = [user.id, (user as any).uid]; // Default to checking user IDs
+              let assignedDoctorIds: string[] = [];
+
+              if (assistantsResult.success && assistantsResult.data) {
+                const assistant = assistantsResult.data.find((a: any) => a.userId === user.id || a.userId === (user as any).uid);
+                if (assistant) {
+                  assistantIds.push(assistant.id);
+                  if ((assistant as any).assignedDoctors && Array.isArray((assistant as any).assignedDoctors)) {
+                    assignedDoctorIds = (assistant as any).assignedDoctors;
+                  }
+                }
+              }
+
+              doctorsData = doctorsData.filter((doc: any) =>
+                // Check if doctor has this assistant assigned
+                (doc.assignedAssistants && doc.assignedAssistants.some((id: string) => assistantIds.includes(id))) ||
+                // Check if assistant has this doctor assigned (reverse relationship)
+                (assignedDoctorIds.includes(doc.id))
+              );
+            }
             // Transform the data to match web app format
-            const transformedDoctors = await transformDoctorData(doctorsResult.data);
+            const transformedDoctors = await transformDoctorData(doctorsData);
             setDoctors(transformedDoctors);
           } else {
             console.log('Admin Doctors - Failed to load doctors, using fallback data');
@@ -596,7 +623,7 @@ export default function AdminDoctors() {
       };
 
       const userResult = await createDocument('users', userDoc);
-      
+
       if (!userResult.success) {
         Alert.alert('Error', 'Failed to create user account. Please try again.');
         return;
@@ -605,10 +632,10 @@ export default function AdminDoctors() {
       // Then create doctor document with userId reference
       // Handle both 'assistants' and 'assignedAssistants' field names for compatibility
       const assistants = doctorData.assistants || doctorData.assignedAssistants || [];
-      
+
       console.log('Creating doctor with assistants:', assistants);
       console.log('Doctor data received:', doctorData);
-      
+
       const doctorDoc = {
         userId: userResult.id, // Reference to the user document
         specialty: doctorData.specialty,
@@ -629,11 +656,11 @@ export default function AdminDoctors() {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      
+
       console.log('Doctor document to create:', doctorDoc);
 
       const doctorResult = await createDocument('doctors', doctorDoc);
-      
+
       if (doctorResult.success) {
         Alert.alert('Success', 'Doctor added successfully!');
         setIsAddDialogOpen(false);
@@ -671,12 +698,12 @@ export default function AdminDoctors() {
 
   const handleEditDoctorSubmit = async (doctorData: any) => {
     if (!selectedDoctor) return;
-    
+
     setIsLoading(true);
     try {
       // Handle both 'assistants' and 'assignedAssistants' field names for compatibility
       const assistants = doctorData.assistants || doctorData.assignedAssistants;
-      
+
       // Prepare update data with all fields
       const updateData: any = {
         specialty: doctorData.specialty,
@@ -703,7 +730,7 @@ export default function AdminDoctors() {
       if (doctorData.phone) updateData.phone = doctorData.phone;
 
       const result = await updateDoctor(selectedDoctor.id, updateData);
-      
+
       if (result.success) {
         Alert.alert('Success', 'Doctor updated successfully!');
         setIsEditDialogOpen(false);
@@ -727,11 +754,11 @@ export default function AdminDoctors() {
 
   const handleDeleteConfirm = async () => {
     if (!selectedDoctor) return;
-    
+
     setIsLoading(true);
     try {
       const result = await deleteDoctor(selectedDoctor.id);
-      
+
       if (result.success) {
         Alert.alert('Success', 'Doctor deleted successfully!');
         setIsDeleteDialogOpen(false);
@@ -798,18 +825,51 @@ export default function AdminDoctors() {
             <Menu />
           </TouchableOpacity>
           <View>
-            <ThemedText style={styles.title}>Doctors</ThemedText>
-            <ThemedText style={styles.subtitle}>Manage doctor profiles and schedules</ThemedText>
+            <ThemedText style={styles.title}>
+              {user?.role === 'doctor'
+                ? 'Your Profile'
+                : user?.role === 'assistant'
+                  ? 'Your Assigned Doctors'
+                  : 'Doctors'
+              }
+            </ThemedText>
+            <ThemedText style={styles.subtitle}>
+              {user?.role === 'doctor'
+                ? 'Your professional profile and information'
+                : user?.role === 'assistant'
+                  ? 'Doctors assigned to you for patient management'
+                  : 'Manage doctor profiles and schedules'
+              }
+            </ThemedText>
+            {/* User context indicator */}
+            {user && (
+              <View style={[
+                styles.roleBadge,
+                { backgroundColor: '#CCFBF1' } // teal-100
+              ]}>
+                <ThemedText style={[
+                  styles.roleBadgeText,
+                  { color: '#115E59' } // teal-800
+                ]}>
+                  {user.role === 'doctor' && '👨‍⚕️ Doctor View'}
+                  {user.role === 'assistant' && '👩‍💼 Assistant View'}
+                  {user.role === 'admin' && '👨‍💼 Admin View'}
+                  {!['doctor', 'assistant', 'admin'].includes(user.role) && 'User View'}
+                </ThemedText>
+              </View>
+            )}
           </View>
         </View>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => setIsAddDialogOpen(true)}
-          disabled={isLoading}
-        >
-          <UserPlus />
-          <ThemedText style={styles.addButtonText}>Add Doctor</ThemedText>
-        </TouchableOpacity>
+        {user?.role !== 'doctor' && user?.role !== 'assistant' && (
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setIsAddDialogOpen(true)}
+            disabled={isLoading}
+          >
+            <UserPlus />
+            <ThemedText style={styles.addButtonText}>Add Doctor</ThemedText>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Sidebar */}
@@ -830,112 +890,133 @@ export default function AdminDoctors() {
         </View>
       ) : (
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.content}>
-          {/* Doctor Cards */}
-          <View style={styles.doctorsGrid}>
-            {getPaginatedDoctors(doctors).map((doctor) => (
-              <View key={doctor.id} style={styles.doctorCard}>
-                <View style={styles.doctorHeader}>
-                  <View style={styles.doctorAvatarContainer}>
-                    <View style={[styles.doctorAvatar, { backgroundColor: doctor.bgColor === 'bg-teal-600' ? '#0D9488' : '#0F766E' }]}>
-                      <ThemedText style={styles.doctorInitials}>
-                        {doctor.initials}
+          <View style={styles.content}>
+            {/* Empty State */}
+            {doctors.length === 0 && (
+              <View style={styles.emptyState}>
+                <Users size={48} color="#D1D5DB" />
+                <ThemedText style={styles.emptyStateText}>
+                  {user?.role === 'assistant'
+                    ? 'No doctors assigned to you'
+                    : 'No doctors found'}
+                </ThemedText>
+              </View>
+            )}
+
+            {/* Doctor Cards */}
+            <View style={styles.doctorsGrid}>
+              {getPaginatedDoctors(doctors).map((doctor) => (
+                <View key={doctor.id} style={styles.doctorCard}>
+                  <View style={styles.doctorHeader}>
+                    <View style={styles.doctorAvatarContainer}>
+                      <View style={[styles.doctorAvatar, { backgroundColor: doctor.bgColor === 'bg-teal-600' ? '#0D9488' : '#0F766E' }]}>
+                        <ThemedText style={styles.doctorInitials}>
+                          {doctor.initials}
+                        </ThemedText>
+                      </View>
+                      {doctor.online && (
+                        <View style={styles.onlineIndicator} />
+                      )}
+                    </View>
+                    <View style={styles.doctorInfo}>
+                      <ThemedText style={styles.doctorName}>
+                        {doctor.name}
+                      </ThemedText>
+                      <ThemedText style={styles.doctorSpecialty}>
+                        {doctor.specialty}
                       </ThemedText>
                     </View>
-                    {doctor.online && (
-                      <View style={styles.onlineIndicator} />
+                    <View style={[styles.statusBadge, { backgroundColor: doctor.statusColor === 'bg-emerald-500' ? '#10B981' : '#6B7280' }]}>
+                      <ThemedText style={styles.statusText}>{doctor.status}</ThemedText>
+                    </View>
+                  </View>
+
+                  <View style={styles.statsContainer}>
+                    <View style={styles.statItem}>
+                      <ThemedText style={styles.statNumber}>{doctor.stats.total}</ThemedText>
+                      <ThemedText style={styles.statLabel}>Total</ThemedText>
+                    </View>
+                    <View style={styles.statItem}>
+                      <ThemedText style={[styles.statNumber, { color: '#059669' }]}>{doctor.stats.done}</ThemedText>
+                      <ThemedText style={styles.statLabel}>Done</ThemedText>
+                    </View>
+                    <View style={styles.statItem}>
+                      <ThemedText style={[styles.statNumber, { color: '#0891B2' }]}>{doctor.stats.waiting}</ThemedText>
+                      <ThemedText style={styles.statLabel}>Waiting</ThemedText>
+                    </View>
+                  </View>
+
+                  <View style={styles.doctorDetails}>
+                    <View style={styles.detailRow}>
+                      <Clock size={16} color="#6B7280" />
+                      <ThemedText style={styles.detailText}>
+                        {doctor.slotDuration}
+                      </ThemedText>
+                    </View>
+                    <View style={styles.assistantsContainer}>
+                      <Users size={16} color="#6B7280" />
+                      <ThemedText style={styles.assistantsLabel}>Assigned Assistants:</ThemedText>
+                    </View>
+                    {doctor.assignedAssistantNames && doctor.assignedAssistantNames.length > 0 ? (
+                      <View style={styles.assistantsTagContainer}>
+                        {(user?.role === 'assistant'
+                          ? doctor.assignedAssistantNames.filter((name: string) =>
+                            user.name && (name === user.name || name.includes(user.name) || user.name.includes(name))
+                          )
+                          : doctor.assignedAssistantNames
+                        ).map((assistantName: string, index: number) => (
+                          <View key={index} style={styles.assistantTag}>
+                            <ThemedText style={styles.assistantTagText}>{assistantName}</ThemedText>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <ThemedText style={styles.noAssistantsText}>No assistants assigned</ThemedText>
                     )}
                   </View>
-                  <View style={styles.doctorInfo}>
-                    <ThemedText style={styles.doctorName}>
-                      {doctor.name}
-                    </ThemedText>
-                    <ThemedText style={styles.doctorSpecialty}>
-                      {doctor.specialty}
-                    </ThemedText>
-                  </View>
-                  <View style={[styles.statusBadge, { backgroundColor: doctor.statusColor === 'bg-emerald-500' ? '#10B981' : '#6B7280' }]}>
-                    <ThemedText style={styles.statusText}>{doctor.status}</ThemedText>
-                  </View>
-                </View>
-                
-                <View style={styles.statsContainer}>
-                  <View style={styles.statItem}>
-                    <ThemedText style={styles.statNumber}>{doctor.stats.total}</ThemedText>
-                    <ThemedText style={styles.statLabel}>Total</ThemedText>
-                  </View>
-                  <View style={styles.statItem}>
-                    <ThemedText style={[styles.statNumber, { color: '#059669' }]}>{doctor.stats.done}</ThemedText>
-                    <ThemedText style={styles.statLabel}>Done</ThemedText>
-                  </View>
-                  <View style={styles.statItem}>
-                    <ThemedText style={[styles.statNumber, { color: '#0891B2' }]}>{doctor.stats.waiting}</ThemedText>
-                    <ThemedText style={styles.statLabel}>Waiting</ThemedText>
-                  </View>
-                </View>
-                
-                <View style={styles.doctorDetails}>
-                  <View style={styles.detailRow}>
-                    <Clock size={16} color="#6B7280" />
-                    <ThemedText style={styles.detailText}>
-                      {doctor.slotDuration}
-                    </ThemedText>
-                  </View>
-                  <View style={styles.assistantsContainer}>
-                    <Users size={16} color="#6B7280" />
-                    <ThemedText style={styles.assistantsLabel}>Assigned Assistants:</ThemedText>
-                  </View>
-                  {doctor.assignedAssistantNames && doctor.assignedAssistantNames.length > 0 ? (
-                    <View style={styles.assistantsTagContainer}>
-                      {doctor.assignedAssistantNames.map((assistantName: string, index: number) => (
-                        <View key={index} style={styles.assistantTag}>
-                          <ThemedText style={styles.assistantTagText}>{assistantName}</ThemedText>
-                        </View>
-                      ))}
-                    </View>
-                  ) : (
-                    <ThemedText style={styles.noAssistantsText}>No assistants assigned</ThemedText>
-                  )}
-                </View>
-                
-                <View style={styles.doctorActions}>
-                  <TouchableOpacity 
-                    style={styles.actionButton}
-                    onPress={() => handleViewDoctor(doctor)}
-                  >
-                    <Eye size={16} color="#059669" />
-                    <ThemedText style={styles.actionText}>View</ThemedText>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.actionButton}
-                    onPress={() => handleEditDoctor(doctor)}
-                  >
-                    <Edit size={16} color="#6B7280" />
-                    <ThemedText style={styles.actionText}>Edit</ThemedText>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.actionButton}
-                    onPress={() => handleDeleteDoctor(doctor)}
-                  >
-                    <Trash2 size={16} color="#DC2626" />
-                    <ThemedText style={styles.actionText}>Delete</ThemedText>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </View>
 
-          {/* Pagination Controls */}
-          <PaginationComponent
-            currentPage={currentPage}
-            totalPages={getTotalPages(doctors)}
-            totalItems={doctors.length}
-            itemsPerPage={itemsPerPage}
-            onPageChange={handlePageChange}
-            onDoublePageChange={handleDoublePageChange}
-          />
-        </View>
-      </ScrollView>
+                  <View style={styles.doctorActions}>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => handleViewDoctor(doctor)}
+                    >
+                      <Eye size={16} color="#059669" />
+                      <ThemedText style={styles.actionText}>View</ThemedText>
+                    </TouchableOpacity>
+                    {user?.role !== 'assistant' && (
+                      <>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => handleEditDoctor(doctor)}
+                        >
+                          <Edit size={16} color="#6B7280" />
+                          <ThemedText style={styles.actionText}>Edit</ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => handleDeleteDoctor(doctor)}
+                        >
+                          <Trash2 size={16} color="#DC2626" />
+                          <ThemedText style={styles.actionText}>Delete</ThemedText>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            {/* Pagination Controls */}
+            <PaginationComponent
+              currentPage={currentPage}
+              totalPages={getTotalPages(doctors)}
+              totalItems={doctors.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={handlePageChange}
+              onDoublePageChange={handleDoublePageChange}
+            />
+          </View>
+        </ScrollView>
       )}
 
       {/* Add Doctor Dialog */}
@@ -1018,6 +1099,17 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 12,
     color: '#6B7280',
+  },
+  roleBadge: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12, // rounded-full approx
+  },
+  roleBadgeText: {
+    fontSize: 10, // text-xs
+    fontWeight: '500', // font-medium
   },
   addButton: {
     flexDirection: 'row',
@@ -1226,5 +1318,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     marginLeft: 4,
+  },
+
+  emptyStateText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
   },
 });
