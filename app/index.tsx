@@ -10,7 +10,7 @@ import { Path, Svg } from 'react-native-svg';
 const StarIcon = () => (
   <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
     <Path
-      d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z" 
+      d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z"
       fill="#14B8A6"
     />
   </Svg>
@@ -19,7 +19,7 @@ const StarIcon = () => (
 const HeartIcon = () => (
   <Svg width={64} height={64} viewBox="0 0 24 24" fill="none">
     <Path
-      d="M20.84 4.61C20.3292 4.099 19.7228 3.69364 19.0554 3.41708C18.3879 3.14052 17.6725 2.99817 16.95 2.99817C16.2275 2.99817 15.5121 3.14052 14.8446 3.41708C14.1772 3.69364 13.5708 4.099 13.06 4.61L12 5.67L10.94 4.61C9.9083 3.5783 8.50903 2.9987 7.05 2.9987C5.59096 2.9987 4.19169 3.5783 3.16 4.61C2.1283 5.6417 1.5487 7.04097 1.5487 8.5C1.5487 9.95903 2.1283 11.3583 3.16 12.39L12 21.23L20.84 12.39C21.351 11.8792 21.7563 11.2728 22.0329 10.6053C22.3095 9.93789 22.4518 9.22248 22.4518 8.5C22.4518 7.77752 22.3095 7.06211 22.0329 6.39467C21.7563 5.72723 21.351 5.1208 20.84 4.61Z" 
+      d="M20.84 4.61C20.3292 4.099 19.7228 3.69364 19.0554 3.41708C18.3879 3.14052 17.6725 2.99817 16.95 2.99817C16.2275 2.99817 15.5121 3.14052 14.8446 3.41708C14.1772 3.69364 13.5708 4.099 13.06 4.61L12 5.67L10.94 4.61C9.9083 3.5783 8.50903 2.9987 7.05 2.9987C5.59096 2.9987 4.19169 3.5783 3.16 4.61C2.1283 5.6417 1.5487 7.04097 1.5487 8.5C1.5487 9.95903 2.1283 11.3583 3.16 12.39L12 21.23L20.84 12.39C21.351 11.8792 21.7563 11.2728 22.0329 10.6053C22.3095 9.93789 22.4518 9.22248 22.4518 8.5C22.4518 7.77752 22.3095 7.06211 22.0329 6.39467C21.7563 5.72723 21.351 5.1208 20.84 4.61Z"
       stroke="#14B8A6"
       strokeWidth="2"
       strokeLinecap="round"
@@ -30,63 +30,63 @@ const HeartIcon = () => (
 
 const UserIcon = () => (
   <Svg width={80} height={80} viewBox="0 0 24 24" fill="#14B8A6">
-    <Path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+    <Path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
   </Svg>
 );
 
 // Treatment Icons
 const FeverIcon = () => (
   <Svg width={24} height={24} viewBox="0 0 24 24" fill="#EF4444">
-    <Path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1s1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7zm0 2c2.76 0 5 2.24 5 5 0 1.38-.56 2.63-1.46 3.54L12 12.54l-3.54-3.54C7.56 8.63 7 7.38 7 6c0-2.76 2.24-5 5-5z"/>
+    <Path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1s1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7zm0 2c2.76 0 5 2.24 5 5 0 1.38-.56 2.63-1.46 3.54L12 12.54l-3.54-3.54C7.56 8.63 7 7.38 7 6c0-2.76 2.24-5 5-5z" />
   </Svg>
 );
 
 const CoughIcon = () => (
   <Svg width={24} height={24} viewBox="0 0 24 24" fill="#EAB308">
-    <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+    <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
   </Svg>
 );
 
 const HeadacheIcon = () => (
   <Svg width={24} height={24} viewBox="0 0 24 24" fill="#EF4444">
-    <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+    <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
   </Svg>
 );
 
 const ToothacheIcon = () => (
   <Svg width={24} height={24} viewBox="0 0 24 24" fill="#FFFFFF">
-    <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+    <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
   </Svg>
 );
 
 const AllergiesIcon = () => (
   <Svg width={24} height={24} viewBox="0 0 24 24" fill="#EC4899">
-    <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+    <Path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
   </Svg>
 );
 
 const SkinIcon = () => (
   <Svg width={24} height={24} viewBox="0 0 24 24" fill="#EAB308">
-    <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+    <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
   </Svg>
 );
 
 // Contact Icons
 const PhoneIcon = () => (
   <Svg width={16} height={16} viewBox="0 0 24 24" fill="#6B7280">
-    <Path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+    <Path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
   </Svg>
 );
 
 const EmailIcon = () => (
   <Svg width={16} height={16} viewBox="0 0 24 24" fill="#6B7280">
-    <Path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+    <Path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" />
   </Svg>
 );
 
 const LocationIcon = () => (
   <Svg width={16} height={16} viewBox="0 0 24 24" fill="#6B7280">
-    <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+    <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
   </Svg>
 );
 
@@ -126,7 +126,7 @@ export default function MainDashboard() {
             </View>
           </View>
           <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-            <ThemedText style={styles.loginButtonText}>Login</ThemedText>
+            <ThemedText style={styles.loginButtonText}>Admin login</ThemedText>
           </TouchableOpacity>
         </View>
 
@@ -189,21 +189,21 @@ export default function MainDashboard() {
                 console.log('doctor.name:', doctor.name);
                 console.log('doctor.specialty:', doctor.specialty);
                 console.log('doctor.userId:', doctor.userId);
-                
+
                 // Get doctor name from ALL possible sources
-                const doctorName = 
+                const doctorName =
                   doctor.user?.name ||        // From user object
                   doctor.name ||              // Direct name field
                   doctor.doctorName ||        // Alternative field name
                   doctor.userName ||          // Another alternative
                   (doctor.specialty ? `${doctor.specialty} Specialist` : 'Doctor'); // Fallback to specialty
-                
+
                 const displayName = doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`;
-                
+
                 console.log('Final doctorName:', doctorName);
                 console.log('Final displayName:', displayName);
                 console.log('==================');
-                
+
                 return (
                   <View key={doctor.id} style={styles.doctorCard}>
                     <View style={styles.doctorImageContainer}>
@@ -221,32 +221,32 @@ export default function MainDashboard() {
                       <ThemedText style={styles.doctorDescription}>
                         {`Dr. ${doctorName} specializes in ${doctor.specialty || 'general medicine'} with ${doctor.consultationDuration || 30} minute consultations.`}
                       </ThemedText>
-                    <View style={styles.doctorMeta}>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          doctor.status === 'In' && styles.statusAvailable,
-                          doctor.status === 'Break' && styles.statusBreak,
-                          doctor.status === 'Out' && styles.statusOffline,
-                        ]}
-                      >
-                        <ThemedText style={styles.statusText}>
-                          {doctor.status === 'In' ? 'Available' : doctor.status === 'Break' ? 'On Break' : 'Offline'}
-                        </ThemedText>
+                      <View style={styles.doctorMeta}>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            doctor.status === 'In' && styles.statusAvailable,
+                            doctor.status === 'Break' && styles.statusBreak,
+                            doctor.status === 'Out' && styles.statusOffline,
+                          ]}
+                        >
+                          <ThemedText style={styles.statusText}>
+                            {doctor.status === 'In' ? 'Available' : doctor.status === 'Break' ? 'On Break' : 'Offline'}
+                          </ThemedText>
+                        </View>
+                        {doctor.consultationDuration && (
+                          <ThemedText style={styles.durationText}>
+                            {doctor.consultationDuration} min sessions
+                          </ThemedText>
+                        )}
                       </View>
-                      {doctor.consultationDuration && (
-                        <ThemedText style={styles.durationText}>
-                          {doctor.consultationDuration} min sessions
-                        </ThemedText>
-                      )}
+                      <TouchableOpacity style={styles.doctorBookButton} onPress={handleBookAppointment}>
+                        <ThemedText style={styles.doctorBookButtonText}>Book Appointment</ThemedText>
+                      </TouchableOpacity>
                     </View>
-                    <TouchableOpacity style={styles.doctorBookButton} onPress={handleBookAppointment}>
-                      <ThemedText style={styles.doctorBookButtonText}>Book Appointment</ThemedText>
-            </TouchableOpacity>
-          </View>
-                </View>
-              );
-            })}
+                  </View>
+                );
+              })}
             </View>
           )}
         </View>
@@ -294,9 +294,9 @@ export default function MainDashboard() {
                 <ThemedText style={styles.treatmentTitle}>Headache</ThemedText>
                 <ThemedText style={styles.treatmentDescription}>
                   Comprehensive headache management including diagnosis, treatment, and prevention strategies.
-            </ThemedText>
+                </ThemedText>
               </View>
-          </View>
+            </View>
 
             {/* Toothache */}
             <View style={styles.treatmentCard}>
@@ -320,9 +320,9 @@ export default function MainDashboard() {
                 <ThemedText style={styles.treatmentTitle}>Allergies</ThemedText>
                 <ThemedText style={styles.treatmentDescription}>
                   Specialized allergy testing and treatment plans tailored to your specific needs and triggers.
-            </ThemedText>
+                </ThemedText>
               </View>
-          </View>
+            </View>
 
             {/* Skin Issues */}
             <View style={styles.treatmentCard}>
@@ -378,7 +378,7 @@ export default function MainDashboard() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
-  
+
   // Header
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#DBEAFE', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
   logoContainer: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -401,15 +401,15 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 32, fontWeight: '700', color: '#1F2937', textAlign: 'center', marginBottom: 12 },
   sectionSubtitle: { fontSize: 16, color: '#6B7280', textAlign: 'center', marginBottom: 8 },
   doctorCount: { fontSize: 14, color: '#9CA3AF', textAlign: 'center', marginBottom: 32 },
-  
+
   loadingContainer: { alignItems: 'center', paddingVertical: 48 },
   loadingText: { marginTop: 12, fontSize: 16, color: '#6B7280' },
-  
+
   errorContainer: { alignItems: 'center', paddingVertical: 48 },
   errorIcon: { fontSize: 32, marginBottom: 8 },
   errorText: { fontSize: 16, color: '#6B7280', marginBottom: 4 },
   errorSubtext: { fontSize: 14, color: '#9CA3AF' },
-  
+
   emptyContainer: { alignItems: 'center', paddingVertical: 48 },
   emptyIcon: { fontSize: 32, marginBottom: 8 },
   emptyText: { fontSize: 16, color: '#6B7280', textAlign: 'center', paddingHorizontal: 20 },
