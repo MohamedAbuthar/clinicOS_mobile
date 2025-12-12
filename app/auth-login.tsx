@@ -208,7 +208,7 @@ export default function AuthLogin() {
             </View>
 
             {/* Tab Switcher */}
-            <View style={styles.tabContainer}>
+            {/* <View style={styles.tabContainer}>
               <TouchableOpacity
                 style={[styles.tab, activeTab === 'login' && styles.activeTab]}
                 onPress={() => {
@@ -231,7 +231,7 @@ export default function AuthLogin() {
                   Sign Up
                 </ThemedText>
               </TouchableOpacity>
-            </View>
+            </View> */}
 
             {/* Form */}
             <View style={styles.form}>
